@@ -300,10 +300,14 @@ class RenomeadorUI(QMainWindow):
         """Salva a API Key no .env na raiz do projeto"""
         from dotenv import load_dotenv
         env_path = self.get_env_path()
-        env_path.parent.mkdir(parents=True, exist_ok=True)
-        lines = []
-        if env_path.exists():
-            lines = env_path.read_text(encoding='utf-8').splitlines()
+        try:
+            env_path.parent.mkdir(parents=True, exist_ok=True)
+            lines = []
+            if env_path.exists():
+                lines = env_path.read_text(encoding='utf-8').splitlines()
+        except OSError as exc:
+            self.show_file_error("Erro ao criar .env", env_path.parent, exc)
+            return
 
         replaced = False
         for idx, line in enumerate(lines):
@@ -315,9 +319,12 @@ class RenomeadorUI(QMainWindow):
         if not replaced:
             lines.append(f"TMDB_API_KEY={api_key}")
 
-        env_path.write_text("\n".join(lines) + "\n", encoding='utf-8')
-        # Força o reload do .env após salvar
-        load_dotenv(dotenv_path=env_path, override=True)
+        try:
+            env_path.write_text("\n".join(lines) + "\n", encoding='utf-8')
+            # Força o reload do .env após salvar
+            load_dotenv(dotenv_path=env_path, override=True)
+        except OSError as exc:
+            self.show_file_error("Erro ao salvar .env", env_path, exc)
 
     def on_search_type_changed(self):
         is_tv = self.search_type_combo.currentData() == "tv"
@@ -330,10 +337,14 @@ class RenomeadorUI(QMainWindow):
         """Salva o idioma no .env na raiz do projeto"""
         from dotenv import load_dotenv
         env_path = self.get_env_path()
-        env_path.parent.mkdir(parents=True, exist_ok=True)
-        lines = []
-        if env_path.exists():
-            lines = env_path.read_text(encoding='utf-8').splitlines()
+        try:
+            env_path.parent.mkdir(parents=True, exist_ok=True)
+            lines = []
+            if env_path.exists():
+                lines = env_path.read_text(encoding='utf-8').splitlines()
+        except OSError as exc:
+            self.show_file_error("Erro ao criar .env", env_path.parent, exc)
+            return
 
         replaced = False
         for idx, line in enumerate(lines):
@@ -345,9 +356,12 @@ class RenomeadorUI(QMainWindow):
         if not replaced:
             lines.append(f"APP_LANGUAGE={language}")
 
-        env_path.write_text("\n".join(lines) + "\n", encoding='utf-8')
-        # Força o reload do .env após salvar
-        load_dotenv(dotenv_path=env_path, override=True)
+        try:
+            env_path.write_text("\n".join(lines) + "\n", encoding='utf-8')
+            # Força o reload do .env após salvar
+            load_dotenv(dotenv_path=env_path, override=True)
+        except OSError as exc:
+            self.show_file_error("Erro ao salvar .env", env_path, exc)
 
     def get_env_value(self, key):
         value = os.getenv(key)
@@ -381,20 +395,36 @@ class RenomeadorUI(QMainWindow):
     def save_folder_preference(self, folder_path):
         """Salva a pasta selecionada nas preferências"""
         config_dir = get_config_dir()
-        config_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            config_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            self.show_file_error("Erro ao criar pasta de configuracao", config_dir, exc)
+            return
+
         config_file = config_dir / "last_folder.txt"
-        config_file.write_text(folder_path)
+        try:
+            config_file.write_text(folder_path)
+        except OSError as exc:
+            self.show_file_error("Erro ao salvar ultima pasta", config_file, exc)
     
     def load_folder_preference(self):
         """Carrega a última pasta selecionada"""
         config_file = get_config_dir() / "last_folder.txt"
         
         if config_file.exists():
-            folder = config_file.read_text().strip()
+            try:
+                folder = config_file.read_text().strip()
+            except OSError as exc:
+                self.show_file_error("Erro ao ler ultima pasta", config_file, exc)
+                return
             if Path(folder).exists():
                 self.selected_folder = folder
                 self.folder_label.setText(f"Pasta: {folder}")
                 self.load_video_files()
+
+    def show_file_error(self, title, path, exc):
+        message = f"{title}:\n{path}\n\nDetalhes: {exc}"
+        QMessageBox.critical(self, "Erro de Arquivo", message)
     
     def load_video_files(self):
         """Carrega lista de arquivos de vídeo da pasta selecionada"""
