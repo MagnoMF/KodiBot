@@ -3,7 +3,8 @@ import os
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QFileDialog, QMessageBox,
-    QSpinBox, QHeaderView, QComboBox, QStyledItemDelegate, QAbstractItemView
+    QSpinBox, QHeaderView, QComboBox, QStyledItemDelegate, QAbstractItemView,
+    QInputDialog
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from pathlib import Path
@@ -169,11 +170,54 @@ class RenomeadorUI(QMainWindow):
         try:
             self.tmdb_client = TMDBClient()
         except ValueError as e:
-            QMessageBox.critical(
-                self, "Erro de Configuração",
-                f"Erro ao inicializar TMDB: {str(e)}\n\n"
-                "Certifique-se de que o arquivo .env contém TMDB_API_KEY"
-            )
+            api_key = self.prompt_api_key()
+            if api_key:
+                self.save_api_key(api_key)
+                os.environ["TMDB_API_KEY"] = api_key
+                try:
+                    self.tmdb_client = TMDBClient()
+                except ValueError as e2:
+                    QMessageBox.critical(
+                        self, "Erro de Configuração",
+                        f"Erro ao inicializar TMDB: {str(e2)}\n\n"
+                        "Verifique a chave informada e tente novamente."
+                    )
+            else:
+                QMessageBox.critical(
+                    self, "Erro de Configuração",
+                    f"Erro ao inicializar TMDB: {str(e)}\n\n"
+                    "Certifique-se de que o arquivo .env contém TMDB_API_KEY"
+                )
+
+    def prompt_api_key(self):
+        """Solicita a API Key do TMDB ao usuario"""
+        key, ok = QInputDialog.getText(
+            self,
+            "Chave TMDB",
+            "Informe sua TMDB API Key:",
+            QLineEdit.EchoMode.Password
+        )
+        key = key.strip()
+        return key if ok and key else None
+
+    def save_api_key(self, api_key):
+        """Salva a API Key no .env na raiz do projeto"""
+        env_path = Path(__file__).parent.parent.parent / ".env"
+        lines = []
+        if env_path.exists():
+            lines = env_path.read_text().splitlines()
+
+        replaced = False
+        for idx, line in enumerate(lines):
+            if line.startswith("TMDB_API_KEY="):
+                lines[idx] = f"TMDB_API_KEY={api_key}"
+                replaced = True
+                break
+
+        if not replaced:
+            lines.append(f"TMDB_API_KEY={api_key}")
+
+        env_path.write_text("\n".join(lines) + "\n")
     
     def browse_folder(self):
         """Abre diálogo para selecionar pasta"""

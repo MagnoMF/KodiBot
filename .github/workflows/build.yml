@@ -6,6 +6,8 @@ on:
   pull_request:
     branches: ["main", "master"]
   workflow_dispatch:
+  release:
+    types: [published]
 
 jobs:
   build:
@@ -53,8 +55,37 @@ jobs:
         run: |
           pyinstaller --onefile --windowed --name KodiBot main.py
 
+      - name: Package artifact (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cd dist
+          zip -r "KodiBot-linux.zip" "KodiBot"
+
+      - name: Package artifact (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist\KodiBot.exe" -DestinationPath "dist\KodiBot-windows.zip"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: KodiBot-${{ runner.os }}
-          path: dist/
+          path: dist/*.zip
+
+  release:
+    needs: build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/**/KodiBot-linux.zip
+            dist/**/KodiBot-windows.zip
