@@ -297,11 +297,12 @@ class RenomeadorUI(QMainWindow):
 
     def save_api_key(self, api_key):
         """Salva a API Key no .env na raiz do projeto"""
+        from dotenv import load_dotenv
         env_path = self.get_env_path()
         env_path.parent.mkdir(parents=True, exist_ok=True)
         lines = []
         if env_path.exists():
-            lines = env_path.read_text().splitlines()
+            lines = env_path.read_text(encoding='utf-8').splitlines()
 
         replaced = False
         for idx, line in enumerate(lines):
@@ -313,7 +314,9 @@ class RenomeadorUI(QMainWindow):
         if not replaced:
             lines.append(f"TMDB_API_KEY={api_key}")
 
-        env_path.write_text("\n".join(lines) + "\n")
+        env_path.write_text("\n".join(lines) + "\n", encoding='utf-8')
+        # Força o reload do .env após salvar
+        load_dotenv(dotenv_path=env_path, override=True)
 
     def on_search_type_changed(self):
         is_tv = self.search_type_combo.currentData() == "tv"
@@ -324,11 +327,12 @@ class RenomeadorUI(QMainWindow):
 
     def save_app_language(self, language):
         """Salva o idioma no .env na raiz do projeto"""
+        from dotenv import load_dotenv
         env_path = self.get_env_path()
         env_path.parent.mkdir(parents=True, exist_ok=True)
         lines = []
         if env_path.exists():
-            lines = env_path.read_text().splitlines()
+            lines = env_path.read_text(encoding='utf-8').splitlines()
 
         replaced = False
         for idx, line in enumerate(lines):
@@ -340,7 +344,9 @@ class RenomeadorUI(QMainWindow):
         if not replaced:
             lines.append(f"APP_LANGUAGE={language}")
 
-        env_path.write_text("\n".join(lines) + "\n")
+        env_path.write_text("\n".join(lines) + "\n", encoding='utf-8')
+        # Força o reload do .env após salvar
+        load_dotenv(dotenv_path=env_path, override=True)
 
     def get_env_value(self, key):
         value = os.getenv(key)
@@ -349,7 +355,7 @@ class RenomeadorUI(QMainWindow):
         env_path = self.get_env_path()
         if not env_path.exists():
             return None
-        for line in env_path.read_text().splitlines():
+        for line in env_path.read_text(encoding='utf-8').splitlines():
             if line.startswith(f"{key}="):
                 return line.split("=", 1)[1].strip()
         return None

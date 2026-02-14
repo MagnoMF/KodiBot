@@ -12,6 +12,8 @@ class TMDBClient:
     BASE_URL = "https://api.themoviedb.org/3"
     
     def __init__(self):
+        # Recarrega o .env para pegar valores atualizados
+        load_dotenv(dotenv_path=ENV_PATH, override=True)
         self.api_key = os.getenv('TMDB_API_KEY')
         if not self.api_key:
             raise ValueError("TMDB_API_KEY não configurada no arquivo .env")

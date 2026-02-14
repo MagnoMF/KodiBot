@@ -49,7 +49,14 @@ pip install -r requirements.txt
 1. Acesse [TheMovieDB](https://www.themoviedb.org/)
 2. Crie uma conta (se não tiver)
 3. Vá para Settings > API para gerar sua chave API
-4. Crie o arquivo `.env`
+
+**Configuração Automática (Recomendado):**
+- Execute o aplicativo
+- Na primeira vez, uma janela solicitará sua API key
+- Informe a chave e o aplicativo criará automaticamente o arquivo `.env`
+
+**Configuração Manual (Opcional):**
+4. Crie o arquivo `.env` na raiz do projeto
 5. Edite o arquivo `.env` e substitua `sua_chave_aqui` pela sua chave real
 
 ```
@@ -116,6 +123,12 @@ Certifique-se de que:
 - Arquivo `.env` existe no diretório raiz
 - A chave está corretamente preenchida
 - Não há espaços extras antes ou depois da chave
+
+**Atenção Windows**: Se o aplicativo não estiver salvando ou encontrando o arquivo `.env`:
+- O aplicativo agora salva automaticamente a API key quando você a informa pela primeira vez
+- O arquivo `.env` é criado automaticamente na raiz do projeto com encoding UTF-8
+- Se o problema persistir, verifique se o usuário tem permissões de escrita na pasta do projeto
+- Certifique-se de que nenhum antivírus está bloqueando a criação de arquivos `.env`
 
 ### "Nenhum resultado encontrado"
 - Verifique se o nome do arquivo esta muito curto
