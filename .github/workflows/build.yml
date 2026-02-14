@@ -1,5 +1,8 @@
 name: build-executables
 
+permissions:
+  contents: write
+
 on:
   push:
     branches: ["main", "master"]
@@ -15,7 +18,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            icon: src/img/tmdb-256.png
+          - os: windows-latest
+            icon: src/img/tmdb.ico
 
     steps:
       - name: Checkout
@@ -53,7 +60,7 @@ jobs:
 
       - name: Build executable
         run: |
-          pyinstaller --onefile --windowed --name KodiBot main.py
+          pyinstaller --onefile --windowed --name KodiBot --icon ${{ matrix.icon }} main.py
 
       - name: Package artifact (Linux)
         if: runner.os == 'Linux'

@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
     QInputDialog
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QIcon, QPixmap
 from pathlib import Path
 
 from src.core.tmdb_client import TMDBClient
@@ -98,6 +99,10 @@ class RenomeadorUI(QMainWindow):
         """Inicializa a interface gráfica"""
         self.setWindowTitle("Kodi Bot - TMDB")
         self.setGeometry(100, 100, 1000, 700)
+
+        icon_path = self.get_asset_path("tmdb-256.png")
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
         
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -106,6 +111,12 @@ class RenomeadorUI(QMainWindow):
         
         # Seção de Configuração
         config_layout = QHBoxLayout()
+        logo_path = self.get_asset_path("tmdb-64.png")
+        if logo_path.exists():
+            logo_label = QLabel()
+            pixmap = QPixmap(str(logo_path))
+            logo_label.setPixmap(pixmap.scaled(64, 64, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            config_layout.addWidget(logo_label)
         config_layout.addWidget(QLabel("Pasta de Filmes:"))
         config_layout.addStretch()
         browse_btn = QPushButton("Procurar Pasta")
@@ -164,6 +175,9 @@ class RenomeadorUI(QMainWindow):
         layout.addLayout(action_layout)
         
         central_widget.setLayout(layout)
+
+    def get_asset_path(self, filename):
+        return Path(__file__).parent.parent / "img" / filename
     
     def init_tmdb(self):
         """Inicializa o cliente TMDB"""
