@@ -5,7 +5,7 @@ class KodiNamer:
     """Classe responsável por renomear arquivos de filmes para o formato Kodi"""
     
     # Formato padrão Kodi: Movie Title (YYYY)
-    KODI_FORMAT = "{title}"
+    KODI_FORMAT = "{title} ({year})"
     
     # Extensões de vídeo suportadas
     VIDEO_EXTENSIONS = ['.mkv', '.mp4', '.avi', '.mov', '.flv', '.wmv', '.m4v']
@@ -62,6 +62,27 @@ class KodiNamer:
         _, ext = os.path.splitext(original_filename)
         kodi_name = KodiNamer.format_kodi_name(tmdb_title, tmdb_year)
         return kodi_name + ext
+
+    @staticmethod
+    def extract_episode_info(filename):
+        name, _ = os.path.splitext(filename)
+        match = re.search(r"\bS(\d{1,2})E(\d{1,2})\b", name, re.IGNORECASE)
+        if not match:
+            match = re.search(r"\b(\d{1,2})x(\d{1,2})\b", name, re.IGNORECASE)
+        if match:
+            return int(match.group(1)), int(match.group(2))
+        return None, None
+
+    @staticmethod
+    def suggest_episode_filename(original_filename, series_title, season, episode, episode_title):
+        _, ext = os.path.splitext(original_filename)
+        season_str = f"S{int(season):02d}" if season is not None else "S00"
+        episode_str = f"E{int(episode):02d}" if episode is not None else "E00"
+        title = episode_title.strip() if episode_title else ""
+        base = f"{series_title} - {season_str}{episode_str}"
+        if title:
+            base = f"{base} - {title}"
+        return f"{base}{ext}"
     
     @staticmethod
     def is_video_file(filename):

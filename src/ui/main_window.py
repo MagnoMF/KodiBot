@@ -92,6 +92,11 @@ class RenomeadorUI(QMainWindow):
         self.search_types = []
         self.active_search_type = "movie"
         self.poster_cache = {}
+        self.series_results = []
+        self.selected_series_id = None
+        self.selected_series_title = ""
+        self.selected_season_number = None
+        self.season_episodes = []
         
         self.init_ui()
         self.init_tmdb()
@@ -132,6 +137,7 @@ class RenomeadorUI(QMainWindow):
         self.search_type_combo.addItem("Filmes", "movie")
         self.search_type_combo.addItem("Series", "tv")
         config_layout.addWidget(self.search_type_combo)
+        self.search_type_combo.currentIndexChanged.connect(self.on_search_type_changed)
         config_layout.addWidget(QLabel("Idioma:"))
         self.language_combo = QComboBox()
         self.language_combo.addItem("Selecione...", "")
@@ -154,6 +160,24 @@ class RenomeadorUI(QMainWindow):
         
         self.folder_label = QLabel("Nenhuma pasta selecionada")
         layout.addWidget(self.folder_label)
+
+        self.series_layout = QHBoxLayout()
+        self.series_layout.addWidget(QLabel("Serie:"))
+        self.series_search_input = QLineEdit()
+        self.series_search_input.setPlaceholderText("Digite o nome da serie")
+        self.series_layout.addWidget(self.series_search_input)
+        self.series_search_btn = QPushButton("Buscar Serie")
+        self.series_search_btn.clicked.connect(self.search_series)
+        self.series_layout.addWidget(self.series_search_btn)
+        self.series_layout.addWidget(QLabel("Resultados:"))
+        self.series_results_combo = QComboBox()
+        self.series_results_combo.currentIndexChanged.connect(self.on_series_selected)
+        self.series_layout.addWidget(self.series_results_combo)
+        self.series_layout.addWidget(QLabel("Temporada:"))
+        self.season_combo = QComboBox()
+        self.season_combo.currentIndexChanged.connect(self.on_season_selected)
+        self.series_layout.addWidget(self.season_combo)
+        layout.addLayout(self.series_layout)
         
         # Seção de Arquivos
         layout.addWidget(QLabel("Arquivos na pasta:"))
@@ -170,6 +194,9 @@ class RenomeadorUI(QMainWindow):
         )
         self.files_table.horizontalHeader().setSectionResizeMode(
             2, QHeaderView.ResizeMode.Stretch
+        )
+        self.files_table.horizontalHeader().setSectionResizeMode(
+            3, QHeaderView.ResizeMode.Stretch
         )
         self.files_table.setEditTriggers(
             QAbstractItemView.EditTrigger.CurrentChanged
@@ -225,6 +252,7 @@ class RenomeadorUI(QMainWindow):
         layout.addLayout(action_layout)
         
         central_widget.setLayout(layout)
+        self.on_search_type_changed()
 
     def get_asset_path(self, filename):
         return Path(__file__).parent.parent / "img" / filename
@@ -286,6 +314,13 @@ class RenomeadorUI(QMainWindow):
             lines.append(f"TMDB_API_KEY={api_key}")
 
         env_path.write_text("\n".join(lines) + "\n")
+
+    def on_search_type_changed(self):
+        is_tv = self.search_type_combo.currentData() == "tv"
+        for i in range(self.series_layout.count()):
+            item = self.series_layout.itemAt(i)
+            if item and item.widget():
+                item.widget().setVisible(is_tv)
 
     def save_app_language(self, language):
         """Salva o idioma no .env na raiz do projeto"""
@@ -404,11 +439,137 @@ class RenomeadorUI(QMainWindow):
         if not self.video_files:
             QMessageBox.warning(self, "Aviso", "Nenhum arquivo de vídeo encontrado na pasta")
             return
+
+        if self.search_type_combo.currentData() == "tv":
+            if not self.selected_series_id or not self.season_episodes:
+                QMessageBox.warning(self, "Aviso", "Selecione uma serie e temporada primeiro")
+                return
+            self.apply_season_to_files()
+            return
         
         # Inicia a busca sequencial
         self.active_search_type = self.search_type_combo.currentData() or "movie"
         self.current_search_index = 0
         self.search_next_file()
+
+    def search_series(self):
+        if not self.tmdb_client:
+            QMessageBox.warning(self, "Erro", "TMDB nao foi inicializado corretamente")
+            return
+        query = self.series_search_input.text().strip()
+        if not query:
+            QMessageBox.warning(self, "Aviso", "Digite o nome da serie")
+            return
+
+        try:
+            results = self.tmdb_client.search_tv(query)
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", f"Erro ao buscar serie: {e}")
+            return
+
+        self.series_results = results or []
+        self.series_results_combo.blockSignals(True)
+        self.series_results_combo.clear()
+        if self.series_results:
+            for result in self.series_results:
+                title = result.get('name', 'N/A')
+                release_date = result.get('first_air_date', '')
+                year = release_date.split('-')[0] if release_date else ''
+                label = f"{title} ({year})" if year else title
+                self.series_results_combo.addItem(label)
+        self.series_results_combo.blockSignals(False)
+        self.on_series_selected()
+
+    def on_series_selected(self):
+        if not self.series_results:
+            self.selected_series_id = None
+            self.selected_series_title = ""
+            self.season_combo.clear()
+            return
+
+        index = self.series_results_combo.currentIndex()
+        if index < 0 or index >= len(self.series_results):
+            return
+        selected = self.series_results[index]
+        self.selected_series_id = selected.get('id')
+        self.selected_series_title = selected.get('name', '')
+
+        try:
+            details = self.tmdb_client.get_tv_details(self.selected_series_id)
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", f"Erro ao buscar temporadas: {e}")
+            return
+
+        seasons = details.get('seasons', [])
+        self.season_combo.blockSignals(True)
+        self.season_combo.clear()
+        for season in seasons:
+            season_number = season.get('season_number')
+            if season_number is None:
+                continue
+            name = season.get('name') or f"Temporada {season_number}"
+            self.season_combo.addItem(name, season_number)
+        self.season_combo.blockSignals(False)
+        self.on_season_selected()
+
+    def on_season_selected(self):
+        season_number = self.season_combo.currentData()
+        if self.selected_series_id is None or season_number is None:
+            return
+        self.selected_season_number = int(season_number)
+
+        try:
+            season_details = self.tmdb_client.get_tv_season_details(
+                self.selected_series_id, self.selected_season_number
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", f"Erro ao buscar episodios: {e}")
+            return
+
+        self.season_episodes = season_details.get('episodes', [])
+        self.apply_season_to_files()
+
+    def apply_season_to_files(self):
+        if not self.season_episodes:
+            return
+
+        for row, video_file in enumerate(self.video_files):
+            self.search_results[row] = self.season_episodes
+            self.search_types[row] = "tv"
+            select_item = self.files_table.item(row, 3)
+            if select_item is None:
+                select_item = QTableWidgetItem()
+                self.files_table.setItem(row, 3, select_item)
+            select_item.setData(RESULTS_ROLE, self.season_episodes)
+            select_item.setData(TYPE_ROLE, "tv")
+
+            season, episode = KodiNamer.extract_episode_info(video_file.name)
+            if season is None:
+                season = self.selected_season_number
+            if season != self.selected_season_number:
+                select_item.setText("Selecione episodio")
+                select_item.setData(SELECTED_ROLE, -1)
+                select_item.setFlags(select_item.flags() | Qt.ItemFlag.ItemIsEditable)
+                continue
+
+            episode_index = -1
+            for idx, ep in enumerate(self.season_episodes):
+                if ep.get('episode_number') == episode:
+                    episode_index = idx
+                    break
+
+            if episode_index >= 0:
+                ep = self.season_episodes[episode_index]
+                ep_title = ep.get('name', '')
+                label = f"E{int(ep.get('episode_number', 0)):02d} - {ep_title}" if ep_title else f"E{int(ep.get('episode_number', 0)):02d}"
+                select_item.setText(label)
+                select_item.setData(SELECTED_ROLE, episode_index)
+                select_item.setFlags(select_item.flags() | Qt.ItemFlag.ItemIsEditable)
+                self.update_suggested_name(row, episode_index)
+            else:
+                select_item.setText("Selecione episodio")
+                select_item.setData(SELECTED_ROLE, -1)
+                select_item.setFlags(select_item.flags() | Qt.ItemFlag.ItemIsEditable)
     
     def search_next_file(self):
         """Busca o próximo arquivo da lista"""
@@ -513,8 +674,17 @@ class RenomeadorUI(QMainWindow):
         selected = results[index]
         media_type = self.search_types[row] or "movie"
         if media_type == "tv":
-            title = selected.get('name', 'N/A')
-            release_date = selected.get('first_air_date', '')
+            episode_title = selected.get('name', '')
+            season_num = selected.get('season_number', self.selected_season_number)
+            episode_num = selected.get('episode_number')
+            series_title = self.selected_series_title or "Serie"
+            video_file = self.video_files[row]
+            suggested_name = KodiNamer.suggest_episode_filename(
+                video_file.name, series_title, season_num, episode_num, episode_title
+            )
+            self.files_table.setItem(row, 2, QTableWidgetItem(suggested_name))
+            self.update_poster(row, index)
+            return
         else:
             title = selected.get('title', 'N/A')
             release_date = selected.get('release_date', '')
@@ -536,15 +706,20 @@ class RenomeadorUI(QMainWindow):
             self.poster_overview.setText("")
             return
 
-        poster_path = results[index].get('poster_path')
         media_type = self.search_types[row] or "movie"
+        if media_type == "tv":
+            poster_path = results[index].get('still_path')
+            image_size = "w300"
+        else:
+            poster_path = results[index].get('poster_path')
+            image_size = "w342"
         self.update_poster_info(results[index], media_type)
         if not poster_path:
             self.poster_label.setText("Sem imagem")
             self.poster_label.setPixmap(QPixmap())
             return
 
-        url = f"https://image.tmdb.org/t/p/w342{poster_path}"
+        url = f"https://image.tmdb.org/t/p/{image_size}{poster_path}"
         if url in self.poster_cache:
             pixmap = self.poster_cache[url]
             self.poster_label.setPixmap(
@@ -579,8 +754,12 @@ class RenomeadorUI(QMainWindow):
 
     def update_poster_info(self, result, media_type):
         if media_type == "tv":
-            title = result.get('name', 'N/A')
-            release_date = result.get('first_air_date', '')
+            episode_title = result.get('name', 'N/A')
+            season_num = result.get('season_number', self.selected_season_number)
+            episode_num = result.get('episode_number')
+            series_title = self.selected_series_title or "Serie"
+            title = f"{series_title} - S{int(season_num):02d}E{int(episode_num):02d}"
+            release_date = ''
         else:
             title = result.get('title', 'N/A')
             release_date = result.get('release_date', '')
@@ -589,6 +768,8 @@ class RenomeadorUI(QMainWindow):
         rating = result.get('vote_average')
         votes = result.get('vote_count')
         overview = result.get('overview', '')
+        if media_type == "tv" and episode_title:
+            overview = f"{episode_title}\n{overview}" if overview else episode_title
 
         self.poster_title.setText(title if title else '')
         meta_parts = []

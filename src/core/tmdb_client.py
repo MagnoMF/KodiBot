@@ -99,3 +99,31 @@ class TMDBClient:
             return response.json()
         except requests.RequestException as e:
             raise Exception(f"Erro ao buscar detalhes: {str(e)}")
+
+    def get_tv_details(self, tv_id):
+        endpoint = f"{self.BASE_URL}/tv/{tv_id}"
+        params = {
+            'api_key': self.api_key,
+            'language': os.getenv('APP_LANGUAGE', 'en')
+        }
+
+        try:
+            response = requests.get(endpoint, params=params, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as e:
+            raise Exception(f"Erro ao buscar detalhes da serie: {str(e)}")
+
+    def get_tv_season_details(self, tv_id, season_number):
+        endpoint = f"{self.BASE_URL}/tv/{tv_id}/season/{season_number}"
+        params = {
+            'api_key': self.api_key,
+            'language': os.getenv('APP_LANGUAGE', 'en')
+        }
+
+        try:
+            response = requests.get(endpoint, params=params, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as e:
+            raise Exception(f"Erro ao buscar temporada: {str(e)}")
