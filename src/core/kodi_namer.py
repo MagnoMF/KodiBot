@@ -5,7 +5,7 @@ class KodiNamer:
     """Classe responsável por renomear arquivos de filmes para o formato Kodi"""
     
     # Formato padrão Kodi: Movie Title (YYYY)
-    KODI_FORMAT = "{title} ({year})"
+    KODI_FORMAT = "{title}"
     
     # Extensões de vídeo suportadas
     VIDEO_EXTENSIONS = ['.mkv', '.mp4', '.avi', '.mov', '.flv', '.wmv', '.m4v']
