@@ -10,6 +10,32 @@ class KodiNamer:
     # Extensões de vídeo suportadas
     VIDEO_EXTENSIONS = ['.mkv', '.mp4', '.avi', '.mov', '.flv', '.wmv', '.m4v']
     
+    # Caracteres inválidos para nomes de arquivos no Windows/Linux
+    INVALID_CHARS = r'[<>:"/\\|?*]'
+    
+    @staticmethod
+    def sanitize_filename(filename):
+        """
+        Remove caracteres inválidos de nomes de arquivos para Windows/Linux
+        
+        Args:
+            filename: Nome do arquivo a sanitizar
+            
+        Returns:
+            Nome sanitizado sem caracteres inválidos
+        """
+        # Remove caracteres inválidos: < > : " / \ | ? *
+        sanitized = re.sub(KodiNamer.INVALID_CHARS, '', filename)
+        # Remove caracteres de controle (0-31)
+        sanitized = re.sub(r'[\x00-\x1f\x7f]', '', sanitized)
+        # Remove espaços múltiplos
+        sanitized = re.sub(r'\s+', ' ', sanitized)
+        # Remove espaços no início e fim
+        sanitized = sanitized.strip()
+        # Remove pontos no final (Windows não permite)
+        sanitized = sanitized.rstrip('.')
+        return sanitized
+    
     @staticmethod
     def clean_filename(filename):
         """Remove extensão e caracteres especiais do nome do arquivo e captura o ano"""
@@ -60,7 +86,9 @@ class KodiNamer:
             Novo nome de arquivo sugerido
         """
         _, ext = os.path.splitext(original_filename)
-        kodi_name = KodiNamer.format_kodi_name(tmdb_title, tmdb_year)
+        # Sanitiza o título antes de formatar
+        clean_title = KodiNamer.sanitize_filename(tmdb_title)
+        kodi_name = KodiNamer.format_kodi_name(clean_title, tmdb_year)
         return kodi_name + ext
 
     @staticmethod
@@ -78,8 +106,10 @@ class KodiNamer:
         _, ext = os.path.splitext(original_filename)
         season_str = f"S{int(season):02d}" if season is not None else "S00"
         episode_str = f"E{int(episode):02d}" if episode is not None else "E00"
-        title = episode_title.strip() if episode_title else ""
-        base = f"{series_title} - {season_str}{episode_str}"
+        # Sanitiza títulos antes de usar
+        clean_series_title = KodiNamer.sanitize_filename(series_title)
+        title = KodiNamer.sanitize_filename(episode_title.strip()) if episode_title else ""
+        base = f"{clean_series_title} - {season_str}{episode_str}"
         if title:
             base = f"{base} - {title}"
         return f"{base}{ext}"

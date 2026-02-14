@@ -12,6 +12,8 @@ Aplicativo desktop em Python para renomear arquivos de midia (filmes e series) u
 - ⚡ **Busca em Thread**: UI responsiva durante as buscas
 - 🔁 **Atualizar Lista**: recarrega arquivos da pasta com um clique
 - 💾 **Ultima Pasta Salva**: carrega automaticamente ao iniciar
+- 📅 **Seleção Automática do Mais Recente**: ordena resultados por ano (mais recente primeiro)
+- 🛡️ **Sanitização de Nomes**: remove caracteres inválidos (`:`, `/`, `\`, `|`, `<`, `>`, `?`, `*`, `"`) para compatibilidade Windows/Linux
 
 ## Requisitos
 
@@ -84,6 +86,8 @@ python3 main.py
 4. **Selecionar Resultado**: Clique na coluna "Selecao" para escolher outro resultado
 5. **Renomear**: Clique em "Renomear Arquivos" para aplicar as mudancas
 
+**Nota:** O aplicativo automaticamente seleciona o resultado mais recente (por ano de lançamento) quando há múltiplos resultados. Você pode clicar na coluna "Seleção" para escolher outra versão se necessário.
+
 ## Estrutura do Projeto
 
 ```
@@ -115,6 +119,17 @@ O aplicativo sugere nomes no padrao Kodi:
 ```
 Titulo (YYYY).ext
 ```
+
+**Sanitização Automática de Caracteres:**
+O aplicativo remove automaticamente caracteres inválidos para sistemas de arquivos Windows/Linux:
+
+```
+Spider-Man: No Way Home (2021).mkv  →  Spider-Man No Way Home (2021).mkv
+The Matrix: Reloaded (2003).mkv     →  The Matrix Reloaded (2003).mkv
+Movie | Part 1 (2020).mp4           →  Movie Part 1 (2020).mp4
+```
+
+Caracteres removidos: `:` `/` `\` `|` `<` `>` `?` `*` `"`
 
 ## Troubleshooting
 

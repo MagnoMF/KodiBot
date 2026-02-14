@@ -473,6 +473,14 @@ class RenomeadorUI(QMainWindow):
             QMessageBox.critical(self, "Erro", f"Erro ao buscar serie: {e}")
             return
 
+        # Ordena series por data de lancamento (mais recente primeiro)
+        if results:
+            results = sorted(
+                results,
+                key=lambda x: x.get('first_air_date', ''),
+                reverse=True
+            )
+        
         self.series_results = results or []
         self.series_results_combo.blockSignals(True)
         self.series_results_combo.clear()
@@ -611,16 +619,28 @@ class RenomeadorUI(QMainWindow):
         """Callback quando a busca é concluída"""
         row = self.current_search_index
         if row < self.files_table.rowCount():
-            self.search_results[row] = results
+            # Ordena os resultados por ano (mais recente primeiro)
+            media_type = self.search_types[row] or "movie"
+            if results:
+                sorted_results = sorted(
+                    results,
+                    key=lambda x: (
+                        x.get('first_air_date', '') if media_type == "tv" else x.get('release_date', '')
+                    ),
+                    reverse=True
+                )
+            else:
+                sorted_results = results
+            
+            self.search_results[row] = sorted_results
             select_item = self.files_table.item(row, 3)
             if select_item is None:
                 select_item = QTableWidgetItem()
                 self.files_table.setItem(row, 3, select_item)
-            media_type = self.search_types[row] or "movie"
-            select_item.setData(RESULTS_ROLE, results)
+            select_item.setData(RESULTS_ROLE, sorted_results)
             select_item.setData(TYPE_ROLE, media_type)
-            if results:
-                best_result = results[0]
+            if sorted_results:
+                best_result = sorted_results[0]
                 if media_type == "tv":
                     title = best_result.get('name', 'N/A')
                     release_date = best_result.get('first_air_date', '')

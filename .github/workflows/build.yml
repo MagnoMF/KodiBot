@@ -62,23 +62,23 @@ jobs:
         run: |
           pyinstaller --onefile --windowed --name KodiBot --icon ${{ matrix.icon }} main.py
 
-      - name: Package artifact (Linux)
+      - name: Prepare artifact (Linux)
         if: runner.os == 'Linux'
         run: |
-          cd dist
-          zip -r "KodiBot-linux.zip" "KodiBot"
+          mkdir -p artifacts
+          cp dist/KodiBot artifacts/
 
-      - name: Package artifact (Windows)
+      - name: Prepare artifact (Windows)
         if: runner.os == 'Windows'
-        shell: pwsh
         run: |
-          Compress-Archive -Path "dist\KodiBot.exe" -DestinationPath "dist\KodiBot-windows.zip"
+          mkdir artifacts
+          copy dist\KodiBot.exe artifacts\
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: KodiBot-${{ runner.os }}
-          path: dist/*.zip
+          path: artifacts/*
 
   release:
     needs: build
@@ -88,11 +88,22 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          path: dist
-          merge-multiple: true
+          path: artifacts
+
+      - name: Create release packages
+        run: |
+          cd artifacts
+          # Package Linux executable
+          cd KodiBot-Linux
+          zip ../KodiBot-linux.zip KodiBot
+          cd ..
+          # Package Windows executable
+          cd KodiBot-Windows
+          zip ../KodiBot-windows.zip KodiBot.exe
+          cd ..
 
       - name: Publish release assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/*.zip
+            artifacts/*.zip
