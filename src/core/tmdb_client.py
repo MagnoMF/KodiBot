@@ -1,9 +1,10 @@
 import os
-from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
-ENV_PATH = Path(__file__).parent.parent.parent / ".env"
+from src.core.config import get_env_path
+
+ENV_PATH = get_env_path()
 load_dotenv(dotenv_path=ENV_PATH)
 
 class TMDBClient:

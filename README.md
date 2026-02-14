@@ -58,7 +58,10 @@ pip install -r requirements.txt
 - Informe a chave e o aplicativo criará automaticamente o arquivo `.env`
 
 **Configuração Manual (Opcional):**
-4. Crie o arquivo `.env` na raiz do projeto
+4. Crie o arquivo `.env` na raiz do projeto (se tiver permissao de escrita) ou em:
+    - Windows: `%APPDATA%\\KodiBot\\.env`
+    - Linux: `~/.config/kodibot/.env`
+    - macOS: `~/Library/Application Support/KodiBot/.env`
 5. Edite o arquivo `.env` e substitua `sua_chave_aqui` pela sua chave real
 
 ```

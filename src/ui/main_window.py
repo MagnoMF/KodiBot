@@ -13,6 +13,7 @@ from pathlib import Path
 
 from src.core.tmdb_client import TMDBClient
 from src.core.kodi_namer import KodiNamer
+from src.core.config import get_config_dir, get_env_path
 
 
 class SearchThread(QThread):
@@ -258,7 +259,7 @@ class RenomeadorUI(QMainWindow):
         return Path(__file__).parent.parent / "img" / filename
 
     def get_env_path(self):
-        return Path(__file__).parent.parent.parent / ".env"
+        return get_env_path()
     
     def init_tmdb(self):
         """Inicializa o cliente TMDB"""
@@ -379,15 +380,14 @@ class RenomeadorUI(QMainWindow):
     
     def save_folder_preference(self, folder_path):
         """Salva a pasta selecionada nas preferências"""
-        config_dir = Path(__file__).parent.parent.parent / ".kodibot"
-        config_dir.mkdir(exist_ok=True)
-        
+        config_dir = get_config_dir()
+        config_dir.mkdir(parents=True, exist_ok=True)
         config_file = config_dir / "last_folder.txt"
         config_file.write_text(folder_path)
     
     def load_folder_preference(self):
         """Carrega a última pasta selecionada"""
-        config_file = Path(__file__).parent.parent.parent / ".kodibot" / "last_folder.txt"
+        config_file = get_config_dir() / "last_folder.txt"
         
         if config_file.exists():
             folder = config_file.read_text().strip()
