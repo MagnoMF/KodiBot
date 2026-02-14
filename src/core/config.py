@@ -11,13 +11,14 @@ def get_project_root():
 
 
 def get_config_dir():
-    project_root = get_project_root()
-    project_config = project_root / ".kodibot"
+    if sys.platform.startswith("win"):
+        base = os.getenv("APPDATA") or os.getenv("LOCALAPPDATA")
+        if base:
+            return Path(base) / PROJECT_NAME
+    elif sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / PROJECT_NAME
 
-    if project_config.exists() or os.access(project_root, os.W_OK):
-        return project_config
-
-    return Path.home() / APP_NAME
+    return Path.home() / ".config" / APP_NAME
 
 
 def get_settings_path():
