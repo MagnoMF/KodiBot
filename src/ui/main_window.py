@@ -1,5 +1,6 @@
 import sys
 import os
+import requests
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QFileDialog, QMessageBox,
@@ -90,6 +91,7 @@ class RenomeadorUI(QMainWindow):
         self.search_results = []
         self.search_types = []
         self.active_search_type = "movie"
+        self.poster_cache = {}
         
         self.init_ui()
         self.init_tmdb()
@@ -130,6 +132,24 @@ class RenomeadorUI(QMainWindow):
         self.search_type_combo.addItem("Filmes", "movie")
         self.search_type_combo.addItem("Series", "tv")
         config_layout.addWidget(self.search_type_combo)
+        config_layout.addWidget(QLabel("Idioma:"))
+        self.language_combo = QComboBox()
+        self.language_combo.addItem("Selecione...", "")
+        self.language_combo.addItem("Portuguese (BR)", "pt-BR")
+        self.language_combo.addItem("English (US)", "en-US")
+        self.language_combo.addItem("Spanish (ES)", "es-ES")
+        current_lang = self.get_env_value("APP_LANGUAGE")
+        if current_lang:
+            lang_index = self.language_combo.findData(current_lang)
+            if lang_index >= 0:
+                self.language_combo.setCurrentIndex(lang_index)
+            else:
+                self.language_combo.addItem(current_lang, current_lang)
+                self.language_combo.setCurrentIndex(self.language_combo.count() - 1)
+        else:
+            self.language_combo.setCurrentIndex(0)
+        self.language_combo.currentIndexChanged.connect(self.on_language_changed)
+        config_layout.addWidget(self.language_combo)
         layout.addLayout(config_layout)
         
         self.folder_label = QLabel("Nenhuma pasta selecionada")
@@ -154,7 +174,37 @@ class RenomeadorUI(QMainWindow):
         self.files_table.setEditTriggers(
             QAbstractItemView.EditTrigger.CurrentChanged
         )
-        layout.addWidget(self.files_table)
+        self.files_table.currentCellChanged.connect(self.on_table_selection_changed)
+        files_layout = QHBoxLayout()
+        files_layout.addWidget(self.files_table, 1)
+
+        poster_layout = QVBoxLayout()
+        self.poster_label = QLabel("Sem imagem")
+        self.poster_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.poster_label.setFixedSize(220, 330)
+        self.poster_label.setStyleSheet("border: 1px solid #444;")
+        poster_layout.addWidget(self.poster_label)
+
+        self.poster_title = QLabel("")
+        self.poster_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.poster_title.setWordWrap(True)
+        poster_layout.addWidget(self.poster_title)
+
+        self.poster_meta = QLabel("")
+        self.poster_meta.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.poster_meta.setWordWrap(True)
+        poster_layout.addWidget(self.poster_meta)
+
+        self.poster_overview = QLabel("")
+        self.poster_overview.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.poster_overview.setWordWrap(True)
+        self.poster_overview.setFixedWidth(220)
+        poster_layout.addWidget(self.poster_overview)
+        poster_layout.addStretch()
+
+        files_layout.addLayout(poster_layout)
+
+        layout.addLayout(files_layout)
 
         self.result_delegate = ResultComboDelegate(self.files_table)
         self.result_delegate.selection_changed.connect(self.on_result_choice_changed)
@@ -178,6 +228,9 @@ class RenomeadorUI(QMainWindow):
 
     def get_asset_path(self, filename):
         return Path(__file__).parent.parent / "img" / filename
+
+    def get_env_path(self):
+        return Path(__file__).parent.parent.parent / ".env"
     
     def init_tmdb(self):
         """Inicializa o cliente TMDB"""
@@ -216,7 +269,8 @@ class RenomeadorUI(QMainWindow):
 
     def save_api_key(self, api_key):
         """Salva a API Key no .env na raiz do projeto"""
-        env_path = Path(__file__).parent.parent.parent / ".env"
+        env_path = self.get_env_path()
+        env_path.parent.mkdir(parents=True, exist_ok=True)
         lines = []
         if env_path.exists():
             lines = env_path.read_text().splitlines()
@@ -232,6 +286,44 @@ class RenomeadorUI(QMainWindow):
             lines.append(f"TMDB_API_KEY={api_key}")
 
         env_path.write_text("\n".join(lines) + "\n")
+
+    def save_app_language(self, language):
+        """Salva o idioma no .env na raiz do projeto"""
+        env_path = self.get_env_path()
+        env_path.parent.mkdir(parents=True, exist_ok=True)
+        lines = []
+        if env_path.exists():
+            lines = env_path.read_text().splitlines()
+
+        replaced = False
+        for idx, line in enumerate(lines):
+            if line.startswith("APP_LANGUAGE="):
+                lines[idx] = f"APP_LANGUAGE={language}"
+                replaced = True
+                break
+
+        if not replaced:
+            lines.append(f"APP_LANGUAGE={language}")
+
+        env_path.write_text("\n".join(lines) + "\n")
+
+    def get_env_value(self, key):
+        value = os.getenv(key)
+        if value:
+            return value
+        env_path = self.get_env_path()
+        if not env_path.exists():
+            return None
+        for line in env_path.read_text().splitlines():
+            if line.startswith(f"{key}="):
+                return line.split("=", 1)[1].strip()
+        return None
+
+    def on_language_changed(self):
+        language = self.language_combo.currentData()
+        if language:
+            os.environ["APP_LANGUAGE"] = language
+            self.save_app_language(language)
     
     def browse_folder(self):
         """Abre diálogo para selecionar pasta"""
@@ -271,6 +363,11 @@ class RenomeadorUI(QMainWindow):
         self.video_files = []
         self.search_results = []
         self.search_types = []
+        self.poster_label.setText("Sem imagem")
+        self.poster_label.setPixmap(QPixmap())
+        self.poster_title.setText("")
+        self.poster_meta.setText("")
+        self.poster_overview.setText("")
         self.files_table.setRowCount(0)
         
         folder_path = Path(self.selected_folder)
@@ -374,6 +471,12 @@ class RenomeadorUI(QMainWindow):
                 select_item.setData(SELECTED_ROLE, -1)
                 select_item.setFlags(select_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 self.files_table.setItem(row, 2, QTableWidgetItem(""))
+                if row == self.current_search_index:
+                    self.poster_label.setText("Sem imagem")
+                    self.poster_label.setPixmap(QPixmap())
+                    self.poster_title.setText("")
+                    self.poster_meta.setText("")
+                    self.poster_overview.setText("")
         
         # Busca o próximo arquivo
         self.current_search_index += 1
@@ -389,6 +492,17 @@ class RenomeadorUI(QMainWindow):
     def on_result_choice_changed(self, row, index):
         """Atualiza o nome sugerido conforme selecao do usuario"""
         self.update_suggested_name(row, index)
+
+    def on_table_selection_changed(self, current_row, current_column, previous_row, previous_column):
+        if current_row < 0 or current_row >= len(self.search_results):
+            return
+        select_item = self.files_table.item(current_row, 3)
+        if not select_item:
+            return
+        selected_index = select_item.data(SELECTED_ROLE)
+        if selected_index is None:
+            return
+        self.update_poster(current_row, int(selected_index))
 
     def update_suggested_name(self, row, index):
         if row >= len(self.search_results):
@@ -410,6 +524,82 @@ class RenomeadorUI(QMainWindow):
             video_file.name, title, year
         )
         self.files_table.setItem(row, 2, QTableWidgetItem(suggested_name))
+        self.update_poster(row, index)
+
+    def update_poster(self, row, index):
+        results = self.search_results[row]
+        if not results or index < 0 or index >= len(results):
+            self.poster_label.setText("Sem imagem")
+            self.poster_label.setPixmap(QPixmap())
+            self.poster_title.setText("")
+            self.poster_meta.setText("")
+            self.poster_overview.setText("")
+            return
+
+        poster_path = results[index].get('poster_path')
+        media_type = self.search_types[row] or "movie"
+        self.update_poster_info(results[index], media_type)
+        if not poster_path:
+            self.poster_label.setText("Sem imagem")
+            self.poster_label.setPixmap(QPixmap())
+            return
+
+        url = f"https://image.tmdb.org/t/p/w342{poster_path}"
+        if url in self.poster_cache:
+            pixmap = self.poster_cache[url]
+            self.poster_label.setPixmap(
+                pixmap.scaled(
+                    self.poster_label.size(),
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
+            return
+
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            pixmap = QPixmap()
+            if pixmap.loadFromData(response.content):
+                self.poster_cache[url] = pixmap
+                self.poster_label.setPixmap(
+                    pixmap.scaled(
+                        self.poster_label.size(),
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                )
+                self.poster_label.setText("")
+            else:
+                self.poster_label.setText("Sem imagem")
+                self.poster_label.setPixmap(QPixmap())
+        except requests.RequestException:
+            self.poster_label.setText("Sem imagem")
+            self.poster_label.setPixmap(QPixmap())
+
+    def update_poster_info(self, result, media_type):
+        if media_type == "tv":
+            title = result.get('name', 'N/A')
+            release_date = result.get('first_air_date', '')
+        else:
+            title = result.get('title', 'N/A')
+            release_date = result.get('release_date', '')
+
+        year = release_date.split('-')[0] if release_date else ''
+        rating = result.get('vote_average')
+        votes = result.get('vote_count')
+        overview = result.get('overview', '')
+
+        self.poster_title.setText(title if title else '')
+        meta_parts = []
+        if year:
+            meta_parts.append(year)
+        if rating is not None:
+            meta_parts.append(f"Avaliacao: {rating:.1f}")
+        if votes is not None:
+            meta_parts.append(f"Votos: {votes}")
+        self.poster_meta.setText(" | ".join(meta_parts))
+        self.poster_overview.setText(overview if overview else "")
     
     def rename_files(self):
         """Renomeia os arquivos selecionados"""
