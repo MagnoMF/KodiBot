@@ -9,6 +9,7 @@ class TMDBClient:
     
     def __init__(self):
         self.api_key = get_setting("TMDB_API_KEY")
+        self.language = get_setting("APP_LANGUAGE", "en")
         if not self.api_key:
             raise ValueError("TMDB_API_KEY não configurada nas configuracoes")
         
@@ -85,7 +86,7 @@ class TMDBClient:
         endpoint = f"{self.BASE_URL}/movie/{movie_id}"
         params = {
             'api_key': self.api_key,
-            'language': os.getenv('APP_LANGUAGE', 'en')
+            'language': self.language
         }
         
         try:
@@ -100,7 +101,7 @@ class TMDBClient:
         endpoint = f"{self.BASE_URL}/tv/{tv_id}"
         params = {
             'api_key': self.api_key,
-            'language': os.getenv('APP_LANGUAGE', 'en')
+            'language': self.language
         }
 
         try:
@@ -114,7 +115,7 @@ class TMDBClient:
         endpoint = f"{self.BASE_URL}/tv/{tv_id}/season/{season_number}"
         params = {
             'api_key': self.api_key,
-            'language': os.getenv('APP_LANGUAGE', 'en')
+            'language': self.language
         }
 
         try:
