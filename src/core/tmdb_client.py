@@ -1,11 +1,6 @@
-import os
 import requests
-from dotenv import load_dotenv
 
-from src.core.config import get_env_path
-
-ENV_PATH = get_env_path()
-load_dotenv(dotenv_path=ENV_PATH)
+from src.core.config import get_setting
 
 class TMDBClient:
     """Cliente para interagir com a API do TheMovieDB"""
@@ -13,11 +8,9 @@ class TMDBClient:
     BASE_URL = "https://api.themoviedb.org/3"
     
     def __init__(self):
-        # Recarrega o .env para pegar valores atualizados
-        load_dotenv(dotenv_path=ENV_PATH, override=True)
-        self.api_key = os.getenv('TMDB_API_KEY')
+        self.api_key = get_setting("TMDB_API_KEY")
         if not self.api_key:
-            raise ValueError("TMDB_API_KEY não configurada no arquivo .env")
+            raise ValueError("TMDB_API_KEY não configurada nas configuracoes")
         
     def search_movie(self, query, year=None):
         print(f"Buscando filme: {query}")
@@ -35,7 +28,7 @@ class TMDBClient:
         params = {
             'api_key': self.api_key,
             'query': query,
-            'language': os.getenv('APP_LANGUAGE', 'en')
+            'language': get_setting("APP_LANGUAGE", "en")
         }
         
         if year:
@@ -65,7 +58,7 @@ class TMDBClient:
         params = {
             'api_key': self.api_key,
             'query': query,
-            'language': os.getenv('APP_LANGUAGE', 'en')
+            'language': get_setting("APP_LANGUAGE", "en")
         }
         
         if year:

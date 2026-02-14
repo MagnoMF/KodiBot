@@ -55,14 +55,13 @@ pip install -r requirements.txt
 **Configuração Automática (Recomendado):**
 - Execute o aplicativo
 - Na primeira vez, uma janela solicitará sua API key
-- Informe a chave e o aplicativo criará automaticamente o arquivo `.env`
+- Informe a chave e o aplicativo salvará automaticamente nas configuracoes do app
 
 **Configuração Manual (Opcional):**
-4. Crie o arquivo `.env` na raiz do projeto (se tiver permissao de escrita) ou em:
-    - Windows: `%APPDATA%\\KodiBot\\.env`
-    - Linux: `~/.config/kodibot/.env`
-    - macOS: `~/Library/Application Support/KodiBot/.env`
-5. Edite o arquivo `.env` e substitua `sua_chave_aqui` pela sua chave real
+4. Crie o arquivo `settings.txt` dentro da pasta `.kodibot`:
+    - Na raiz do projeto (se tiver permissao de escrita): `./.kodibot/settings.txt`
+    - Caso nao tenha permissao: `~/.kodibot/settings.txt`
+5. Edite o arquivo `settings.txt` e substitua `sua_chave_aqui` pela sua chave real
 
 ```
 TMDB_API_KEY=sua_chave_aqui
@@ -97,7 +96,7 @@ python3 main.py
 KodiBot/
 ├── main.py                    # Ponto de entrada
 ├── requirements.txt           # Dependências Python
-├── .env                       # Configuracao (nao commitar)
+├── .kodibot/                  # Configuracao do app
 └── src/
     ├── __init__.py
     ├── core/                  # Lógica principal
@@ -113,7 +112,6 @@ KodiBot/
 
 - **requests**: Requisições HTTP para API TMDB
 - **PyQt6**: Framework para interface gráfica
-- **python-dotenv**: Gerencimento de variáveis de ambiente
 
 ## Formato de Nomenclatura Kodi
 
@@ -138,15 +136,15 @@ Caracteres removidos: `:` `/` `\` `|` `<` `>` `?` `*` `"`
 
 ### "TMDB_API_KEY não configurada"
 Certifique-se de que:
-- Arquivo `.env` existe no diretório raiz
+- Arquivo `settings.txt` existe em `.kodibot`
 - A chave está corretamente preenchida
 - Não há espaços extras antes ou depois da chave
 
-**Atenção Windows**: Se o aplicativo não estiver salvando ou encontrando o arquivo `.env`:
-- O aplicativo agora salva automaticamente a API key quando você a informa pela primeira vez
-- O arquivo `.env` é criado automaticamente na raiz do projeto com encoding UTF-8
+**Atenção Windows**: Se o aplicativo não estiver salvando ou encontrando o arquivo `settings.txt`:
+- O aplicativo salva automaticamente a API key quando você a informa pela primeira vez
+- O arquivo `settings.txt` é criado automaticamente na pasta `.kodibot`
 - Se o problema persistir, verifique se o usuário tem permissões de escrita na pasta do projeto
-- Certifique-se de que nenhum antivírus está bloqueando a criação de arquivos `.env`
+- Certifique-se de que nenhum antivírus está bloqueando a criação de arquivos na pasta `.kodibot`
 
 ### "Nenhum resultado encontrado"
 - Verifique se o nome do arquivo esta muito curto
