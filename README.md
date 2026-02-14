@@ -1,14 +1,17 @@
-# Renomeador de Filmes - TMDB
+# KodiBot - Renomeador de Midia (TMDB)
 
-Aplicativo desktop desenvolvido em Python para renomear filmes automaticamente usando dados da API do TheMovieDB (TMDB), garantindo compatibilidade com Kodi.
+Aplicativo desktop em Python para renomear arquivos de midia (filmes e series) usando dados da API do TheMovieDB (TMDB), com padrao compativel com Kodi.
 
 ## Funcionalidades
 
-- 🔍 **Busca de Filmes**: Integração com API do TMDB para buscar informações precisas
-- 📝 **Renomeação Automática**: Formata nomes conforme padrão Kodi (Movie Title (YYYY))
-- 🎬 **Suporte Múltiplos Formatos**: mkv, mp4, avi, mov, flv, wmv, m4v
-- 💻 **Interface Gráfica**: Moderna e intuitiva com PyQt6
-- ⚡ **Thread de Busca**: Operações não-bloqueantes na UI
+- 🔍 **Busca TMDB (Filmes e Series)**: selecione o tipo no app e busque direto na API
+- 🧠 **Limpeza Inteligente de Nomes**: remove tags de release/qualidade e numeros antes da busca
+- 📝 **Renomeacao Automatica**: aplica padrao Kodi no nome sugerido
+- 🎬 **Suporte a Multiplos Formatos**: mkv, mp4, avi, mov, flv, wmv, m4v
+- 💻 **Interface Grafica PyQt6**: lista de arquivos, ano detectado e selecao de resultado
+- ⚡ **Busca em Thread**: UI responsiva durante as buscas
+- 🔁 **Atualizar Lista**: recarrega arquivos da pasta com um clique
+- 💾 **Ultima Pasta Salva**: carrega automaticamente ao iniciar
 
 ## Requisitos
 
@@ -20,7 +23,7 @@ Aplicativo desktop desenvolvido em Python para renomear filmes automaticamente u
 ### 1. Clone ou Extraia o Projeto
 
 ```bash
-cd renomeadorFilmes
+cd KodiBot
 ```
 
 ### 2. Crie um Ambiente Virtual
@@ -46,8 +49,8 @@ pip install -r requirements.txt
 1. Acesse [TheMovieDB](https://www.themoviedb.org/)
 2. Crie uma conta (se não tiver)
 3. Vá para Settings > API para gerar sua chave API
-4. Copie o arquivo `.env.example` para `.env`
-5. Edite o arquivo `.env` e substitua `your_api_key_here` pela sua chave real
+4. Crie o arquivo `.env`
+5. Edite o arquivo `.env` e substitua `sua_chave_aqui` pela sua chave real
 
 ```
 TMDB_API_KEY=sua_chave_aqui
@@ -68,20 +71,19 @@ python3 main.py
 
 ### Como Usar
 
-1. **Selecionar Pasta**: Clique em "Procurar Pasta" e selecione a pasta com seus filmes
-2. **Buscar Filme**: Digite o nome no campo de busca e clique em "Buscar"
-3. **Selecionar Resultado**: Escolha o resultado correto na tabela de resultados
-4. **Revisar Sugestões**: Os nomes sugeridos aparecerão na coluna "Nome Sugerido"
-5. **Renomear**: Clique em "Renomear Selecionados" para aplicar as mudanças
+1. **Selecionar Pasta**: Clique em "Procurar Pasta" e selecione a pasta com seus arquivos
+2. **Escolher Tipo**: Selecione "Filmes" ou "Series"
+3. **Buscar**: Clique em "Buscar Filmes" (vale para ambos os tipos)
+4. **Selecionar Resultado**: Clique na coluna "Selecao" para escolher outro resultado
+5. **Renomear**: Clique em "Renomear Arquivos" para aplicar as mudancas
 
 ## Estrutura do Projeto
 
 ```
-renomeadorFilmes/
+KodiBot/
 ├── main.py                    # Ponto de entrada
 ├── requirements.txt           # Dependências Python
-├── .env.example               # Exemplo de configuração
-├── .env                       # Configuração (não commitado)
+├── .env                       # Configuracao (nao commitar)
 └── src/
     ├── __init__.py
     ├── core/                  # Lógica principal
@@ -101,16 +103,11 @@ renomeadorFilmes/
 
 ## Formato de Nomenclatura Kodi
 
-O aplicativo formata os nomes conforme padrão Kodi:
+O aplicativo sugere nomes no padrao Kodi:
 
 ```
-Film Title (YYYY).ext
+Titulo (YYYY).ext
 ```
-
-**Exemplos:**
-- `The Matrix (1999).mkv`
-- `Inception (2010).mp4`
-- `Interstellar (2014).avi`
 
 ## Troubleshooting
 
@@ -120,10 +117,10 @@ Certifique-se de que:
 - A chave está corretamente preenchida
 - Não há espaços extras antes ou depois da chave
 
-### "Nenhum filme encontrado"
-- Verifique a digitação do nome
-- Tente buscar apenas pelo título principal
-- Use o campo "Ano" para filtrar resultados
+### "Nenhum resultado encontrado"
+- Verifique se o nome do arquivo esta muito curto
+- Tente outra selecao na coluna "Selecao"
+- Ajuste `APP_LANGUAGE` se quiser resultados em pt-BR
 
 ### Erro de Conexão com TMDB
 - Verifique sua conexão com internet
@@ -134,27 +131,25 @@ Certifique-se de que:
 
 ### Estrutura de Código
 
-**tmdb_client.py**: Cliente para comunicação com TMDB
-- `search_movie()`: Busca filmes por título e ano
-- `get_movie_details()`: Obtém informações detalhadas
+**tmdb_client.py**: Cliente para comunicacao com TMDB
+- `search_movie()`: Busca filmes por titulo e ano
+- `search_tv()`: Busca series por titulo e ano
 
-**kodi_namer.py**: Lógica de renomeação
-- `format_kodi_name()`: Formata o nome no padrão Kodi
-- `is_video_file()`: Valida extensões de vídeo
+**kodi_namer.py**: Logica de renomeacao
+- `clean_filename()`: Limpa nome para busca no TMDB
+- `format_kodi_name()`: Formata o nome no padrao Kodi
+- `is_video_file()`: Valida extensoes de video
 
-**main_window.py**: Interface gráfica PyQt6
+**main_window.py**: Interface grafica PyQt6
 - Gerenciamento de pasta
 - Busca em thread separada
-- Preview de renomeação
+- Selecionar resultado por linha
 
 ## Futuras Melhorias
 
-- [ ] Busca de legendas automática
-- [ ] Criação de estrutura de pasta por gênero
-- [ ] Edição em lote de metadados
-- [ ] Suporte a séries de TV
-- [ ] Backup automático antes de renomear
-- [ ] Desfazer último(s) renomeação(ões)
+- [ ] Renomeacao de episodios (S01E01)
+- [ ] Backup automatico antes de renomear
+- [ ] Desfazer ultima(s) renomeacao(oes)
 
 ## Licença
 
@@ -164,9 +159,8 @@ Este projeto é fornecido como está.
 
 Para problemas ou sugestões, abra uma issue no repositório.
 
-## Créditos
+## Creditos
 
-- [TheMovieDB](https://www.themoviedb.org/) - Banco de dados de filmes
+- [TheMovieDB](https://www.themoviedb.org/) - Banco de dados de midia
 - [Kodi](https://kodi.tv/) - Media center
 - [PyQt6](https://riverbankcomputing.com/software/pyqt/) - Framework GUI
-# KodiBot
