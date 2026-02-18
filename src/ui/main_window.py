@@ -56,6 +56,7 @@ class RenomeadorUI(QMainWindow):
         self.series_results = []
         self.selected_series_id = None
         self.selected_series_title = ""
+        self.selected_series_year = None
         self.selected_season_number = None
         self.season_episodes = []
         
@@ -313,13 +314,14 @@ class RenomeadorUI(QMainWindow):
             self.files_section.clear_kodi_files()
             return
 
-        kodi_files = []
-        for file in kodi_path.iterdir():
-            if file.is_file() and KodiNamer.is_video_file(file.name):
-                kodi_files.append(file.name)
+        kodi_entries = []
+        for item in kodi_path.rglob("*"):
+            if item.is_file() and KodiNamer.is_video_file(item.name):
+                relative_item = item.relative_to(kodi_path).as_posix()
+                kodi_entries.append(relative_item)
 
-        kodi_files.sort(key=str.lower)
-        self.files_section.set_kodi_files(kodi_files)
+        kodi_entries.sort(key=str.lower)
+        self.files_section.set_kodi_files(kodi_entries)
     
     def search_movie(self):
         """Busca filmes no TMDB baseado nos arquivos da pasta"""
@@ -383,6 +385,7 @@ class RenomeadorUI(QMainWindow):
         if not self.series_results:
             self.selected_series_id = None
             self.selected_series_title = ""
+            self.selected_series_year = None
             self.season_combo.clear()
             return
 
@@ -392,6 +395,8 @@ class RenomeadorUI(QMainWindow):
         selected = self.series_results[index]
         self.selected_series_id = selected.get('id')
         self.selected_series_title = selected.get('name', '')
+        first_air_date = selected.get('first_air_date', '')
+        self.selected_series_year = first_air_date.split('-')[0] if first_air_date else None
 
         try:
             details = self.tmdb_client.get_tv_details(self.selected_series_id)
@@ -416,6 +421,7 @@ class RenomeadorUI(QMainWindow):
         if self.selected_series_id is None or season_number is None:
             return
         self.selected_season_number = int(season_number)
+        self.load_kodi_files()
 
         try:
             season_details = self.tmdb_client.get_tv_season_details(
@@ -593,7 +599,10 @@ class RenomeadorUI(QMainWindow):
             episode_title = selected.get('name', '')
             season_num = selected.get('season_number', self.selected_season_number)
             episode_num = selected.get('episode_number')
-            series_title = self.selected_series_title or "Serie"
+            series_title = KodiNamer.format_series_name_for_kodi(
+                self.selected_series_title,
+                self.selected_series_year,
+            )
             video_file = self.video_files[row]
             suggested_name = KodiNamer.suggest_episode_filename(
                 video_file.name, series_title, season_num, episode_num, episode_title
@@ -701,6 +710,33 @@ class RenomeadorUI(QMainWindow):
             meta_parts.append(f"Votos: {votes}")
         self.poster_meta.setText(" | ".join(meta_parts))
         self.poster_overview.setText(overview if overview else "")
+
+    def get_selected_tv_destination_folder(self):
+        kodi_folder = self.header_config.get_kodi_selected_folder()
+        if not kodi_folder:
+            return None
+
+        kodi_path = Path(kodi_folder)
+        if not kodi_path.exists() or not kodi_path.is_dir():
+            return None
+
+        if not self.selected_series_title or self.selected_season_number is None:
+            return None
+
+        series_folder_name = KodiNamer.format_series_name_for_kodi(
+            self.selected_series_title,
+            self.selected_series_year,
+        )
+        season_folder_name = f"Temporada {int(self.selected_season_number):02d}"
+        return kodi_path / series_folder_name / season_folder_name
+
+    def ensure_selected_tv_destination_folder_exists(self):
+        destination_folder = self.get_selected_tv_destination_folder()
+        if destination_folder is None:
+            return None
+
+        destination_folder.mkdir(parents=True, exist_ok=True)
+        return destination_folder
     
     def rename_files(self):
         """Copia os arquivos marcados para a pasta do Kodi"""
@@ -740,7 +776,14 @@ class RenomeadorUI(QMainWindow):
             suggested_name = select_item.data(SUGGESTED_NAME_ROLE) or original_name
             
             original_path = Path(self.selected_folder) / original_name
-            new_path = kodi_path / suggested_name
+            media_type = select_item.data(TYPE_ROLE) or (self.search_types[row] if row < len(self.search_types) else None) or "movie"
+            destination_folder = kodi_path
+
+            if media_type == "tv":
+                destination_folder = self.ensure_selected_tv_destination_folder_exists() or kodi_path
+
+            destination_folder.mkdir(parents=True, exist_ok=True)
+            new_path = destination_folder / suggested_name
 
             if not original_path.exists():
                 errors.append(f"{original_name}: arquivo de origem não encontrado")

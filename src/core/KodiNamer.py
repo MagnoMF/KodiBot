@@ -107,12 +107,19 @@ class KodiNamer:
         season_str = f"S{int(season):02d}" if season is not None else "S00"
         episode_str = f"E{int(episode):02d}" if episode is not None else "E00"
         # Sanitiza títulos antes de usar
-        clean_series_title = KodiNamer.sanitize_filename(series_title)
+        clean_series_title = KodiNamer.format_series_name_for_kodi(series_title)
         title = KodiNamer.sanitize_filename(episode_title.strip()) if episode_title else ""
         base = f"{clean_series_title} - {season_str}{episode_str}"
         if title:
             base = f"{base} - {title}"
         return f"{base}{ext}"
+
+    @staticmethod
+    def format_series_name_for_kodi(series_title, first_air_year=None):
+        clean_series_title = KodiNamer.sanitize_filename(series_title or "Serie")
+        if first_air_year:
+            return f"{clean_series_title} ({first_air_year})"
+        return clean_series_title
     
     @staticmethod
     def is_video_file(filename):
