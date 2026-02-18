@@ -89,23 +89,35 @@ class RenomeadorUI(QMainWindow):
         self.search_type_combo = self.header_config.search_type_combo
         self.folder_label = self.header_config.folder_label
 
-        self.series_layout = QHBoxLayout()
-        self.series_layout.addWidget(QLabel("Serie:"))
+        self.series_controls_widget = QWidget()
+        self.series_layout = QVBoxLayout()
+
+        search_row = QHBoxLayout()
+        search_row.addWidget(QLabel("Serie:"))
         self.series_search_input = QLineEdit()
         self.series_search_input.setPlaceholderText("Digite o nome da serie")
-        self.series_layout.addWidget(self.series_search_input)
+        search_row.addWidget(self.series_search_input)
         self.series_search_btn = QPushButton("Buscar Serie")
         self.series_search_btn.clicked.connect(self.search_series)
-        self.series_layout.addWidget(self.series_search_btn)
-        self.series_layout.addWidget(QLabel("Resultados:"))
+        search_row.addWidget(self.series_search_btn)
+
+        result_row = QHBoxLayout()
+        result_row.addWidget(QLabel("Nome da Serie:"))
         self.series_results_combo = QComboBox()
         self.series_results_combo.currentIndexChanged.connect(self.on_series_selected)
-        self.series_layout.addWidget(self.series_results_combo)
-        self.series_layout.addWidget(QLabel("Temporada:"))
+        result_row.addWidget(self.series_results_combo)
+
+        season_row = QHBoxLayout()
+        season_row.addWidget(QLabel("Temporada:"))
         self.season_combo = QComboBox()
         self.season_combo.currentIndexChanged.connect(self.on_season_selected)
-        self.series_layout.addWidget(self.season_combo)
-        layout.addLayout(self.series_layout)
+        season_row.addWidget(self.season_combo)
+
+        self.series_layout.addLayout(search_row)
+        self.series_layout.addLayout(result_row)
+        self.series_layout.addLayout(season_row)
+        self.series_controls_widget.setLayout(self.series_layout)
+        layout.addWidget(self.series_controls_widget)
         
         self.files_section = NewFilesList(parent=self)
         self.files_table = self.files_section.files_table
@@ -201,10 +213,7 @@ class RenomeadorUI(QMainWindow):
 
     def on_search_type_changed(self, *_):
         is_tv = self.search_type_combo.currentData() == "tv"
-        for i in range(self.series_layout.count()):
-            item = self.series_layout.itemAt(i)
-            if item and item.widget():
-                item.widget().setVisible(is_tv)
+        self.series_controls_widget.setVisible(is_tv)
 
     def save_app_language(self, language):
         """Salva o idioma nas configuracoes do app"""
@@ -387,6 +396,11 @@ class RenomeadorUI(QMainWindow):
             self.selected_series_title = ""
             self.selected_series_year = None
             self.season_combo.clear()
+            self.poster_label.setText("Sem imagem")
+            self.poster_label.setPixmap(QPixmap())
+            self.poster_title.setText("")
+            self.poster_meta.setText("")
+            self.poster_overview.setText("")
             return
 
         index = self.series_results_combo.currentIndex()
@@ -397,6 +411,7 @@ class RenomeadorUI(QMainWindow):
         self.selected_series_title = selected.get('name', '')
         first_air_date = selected.get('first_air_date', '')
         self.selected_series_year = first_air_date.split('-')[0] if first_air_date else None
+        self.update_selected_series_poster(selected)
 
         try:
             details = self.tmdb_client.get_tv_details(self.selected_series_id)
@@ -415,6 +430,65 @@ class RenomeadorUI(QMainWindow):
             self.season_combo.addItem(name, season_number)
         self.season_combo.blockSignals(False)
         self.on_season_selected()
+
+    def update_selected_series_poster(self, series_result):
+        title = series_result.get('name', '')
+        release_date = series_result.get('first_air_date', '')
+        year = release_date.split('-')[0] if release_date else ''
+        rating = series_result.get('vote_average')
+        votes = series_result.get('vote_count')
+        overview = series_result.get('overview', '')
+
+        self.poster_title.setText(f"{title} ({year})" if year else title)
+        meta_parts = []
+        if year:
+            meta_parts.append(year)
+        if rating is not None:
+            meta_parts.append(f"Avaliacao: {rating:.1f}")
+        if votes is not None:
+            meta_parts.append(f"Votos: {votes}")
+        self.poster_meta.setText(" | ".join(meta_parts))
+        self.poster_overview.setText(overview if overview else "")
+
+        poster_path = series_result.get('poster_path')
+        if not poster_path:
+            self.poster_label.setText("Sem imagem")
+            self.poster_label.setPixmap(QPixmap())
+            return
+
+        url = f"https://image.tmdb.org/t/p/w342{poster_path}"
+        if url in self.poster_cache:
+            pixmap = self.poster_cache[url]
+            self.poster_label.setPixmap(
+                pixmap.scaled(
+                    self.poster_label.size(),
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
+            self.poster_label.setText("")
+            return
+
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            pixmap = QPixmap()
+            if pixmap.loadFromData(response.content):
+                self.poster_cache[url] = pixmap
+                self.poster_label.setPixmap(
+                    pixmap.scaled(
+                        self.poster_label.size(),
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                )
+                self.poster_label.setText("")
+            else:
+                self.poster_label.setText("Sem imagem")
+                self.poster_label.setPixmap(QPixmap())
+        except requests.RequestException:
+            self.poster_label.setText("Sem imagem")
+            self.poster_label.setPixmap(QPixmap())
 
     def on_season_selected(self):
         season_number = self.season_combo.currentData()
@@ -728,7 +802,7 @@ class RenomeadorUI(QMainWindow):
             self.selected_series_year,
         )
         season_folder_name = f"Temporada {int(self.selected_season_number):02d}"
-        return kodi_path / series_folder_name / season_folder_name
+        return kodi_path / "Series" / series_folder_name / season_folder_name
 
     def ensure_selected_tv_destination_folder_exists(self):
         destination_folder = self.get_selected_tv_destination_folder()
