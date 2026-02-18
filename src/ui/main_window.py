@@ -15,7 +15,14 @@ from src.core.assets_handler import get_asset_path
 from src.core.config import get_setting, get_settings_path, set_setting
 from src.ui.components.HeaderSettings import HeaderSettings
 from src.ui.components.MoreSettings import MoreSettings
-from src.ui.components.NewFilesList import NewFilesList, RESULTS_ROLE, SELECTED_ROLE, TYPE_ROLE, SUGGESTED_NAME_ROLE
+from src.ui.components.NewFilesList import (
+    NewFilesList,
+    RESULTS_ROLE,
+    SELECTED_ROLE,
+    TYPE_ROLE,
+    SUGGESTED_NAME_ROLE,
+    ORIGINAL_PATH_ROLE,
+)
 
 
 class SearchThread(QThread):
@@ -282,15 +289,26 @@ class RenomeadorUI(QMainWindow):
         self.files_table.setRowCount(0)
         
         folder_path = Path(self.selected_folder)
-        for file in folder_path.iterdir():
+        video_candidates = sorted(
+            (
+                file
+                for file in folder_path.rglob("*")
+                if file.is_file() and KodiNamer.is_video_file(file.name)
+            ),
+            key=lambda path: path.relative_to(folder_path).as_posix().lower(),
+        )
+
+        for file in video_candidates:
             if KodiNamer.is_video_file(file.name):
                 self.video_files.append(file)
                 self.search_results.append([])
                 self.search_types.append(None)
                 row = self.files_table.rowCount()
                 self.files_table.insertRow(row)
-                original_item = QTableWidgetItem(file.name)
+                relative_file = file.relative_to(folder_path).as_posix()
+                original_item = QTableWidgetItem(relative_file)
                 original_item.setFlags(original_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                original_item.setData(ORIGINAL_PATH_ROLE, str(file))
                 self.files_table.setItem(row, self.original_column, original_item)
 
                 year_item = QTableWidgetItem("")
@@ -846,10 +864,12 @@ class RenomeadorUI(QMainWindow):
 
             selected_count += 1
             
-            original_name = original_item.text()
+            original_display = original_item.text()
+            original_path_data = original_item.data(ORIGINAL_PATH_ROLE)
+            original_path = Path(original_path_data) if original_path_data else Path(self.selected_folder) / original_display
+            original_name = original_path.name
             suggested_name = select_item.data(SUGGESTED_NAME_ROLE) or original_name
-            
-            original_path = Path(self.selected_folder) / original_name
+
             media_type = select_item.data(TYPE_ROLE) or (self.search_types[row] if row < len(self.search_types) else None) or "movie"
             destination_folder = kodi_path
 
@@ -860,7 +880,7 @@ class RenomeadorUI(QMainWindow):
             new_path = destination_folder / suggested_name
 
             if not original_path.exists():
-                errors.append(f"{original_name}: arquivo de origem não encontrado")
+                errors.append(f"{original_display}: arquivo de origem não encontrado")
                 continue
 
             if new_path.exists():
@@ -874,7 +894,7 @@ class RenomeadorUI(QMainWindow):
                     shutil.copy2(original_path, new_path)
                 copied_count += 1
             except Exception as e:
-                errors.append(f"{original_name}: {str(e)}")
+                errors.append(f"{original_display}: {str(e)}")
 
         if selected_count == 0:
             QMessageBox.information(self, "Aviso", "Nenhum arquivo marcado para envio")

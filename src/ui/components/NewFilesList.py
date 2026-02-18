@@ -17,6 +17,7 @@ RESULTS_ROLE = int(Qt.ItemDataRole.UserRole) + 1
 SELECTED_ROLE = int(Qt.ItemDataRole.UserRole) + 2
 TYPE_ROLE = int(Qt.ItemDataRole.UserRole) + 3
 SUGGESTED_NAME_ROLE = int(Qt.ItemDataRole.UserRole) + 4
+ORIGINAL_PATH_ROLE = int(Qt.ItemDataRole.UserRole) + 5
 
 
 class ResultComboDelegate(QStyledItemDelegate):
