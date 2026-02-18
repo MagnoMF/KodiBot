@@ -1,19 +1,21 @@
-import sys
-import os
 import requests
+import shutil
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QTableWidget, QTableWidgetItem, QFileDialog, QMessageBox,
-    QSpinBox, QHeaderView, QComboBox, QStyledItemDelegate, QAbstractItemView,
-    QInputDialog
+    QPushButton, QTableWidgetItem, QMessageBox,
+    QComboBox,
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QIcon, QPixmap
 from pathlib import Path
 
-from src.core.tmdb_client import TMDBClient
-from src.core.kodi_namer import KodiNamer
-from src.core.config import get_config_dir, get_setting, get_settings_path, set_setting
+from src.core.TmdbClient import TMDBClient
+from src.core.KodiNamer import KodiNamer
+from src.core.assets_handler import get_asset_path
+from src.core.config import get_setting, get_settings_path, set_setting
+from src.ui.components.HeaderSettings import HeaderSettings
+from src.ui.components.MoreSettings import MoreSettings
+from src.ui.components.NewFilesList import NewFilesList, RESULTS_ROLE, SELECTED_ROLE, TYPE_ROLE, SUGGESTED_NAME_ROLE
 
 
 class SearchThread(QThread):
@@ -37,48 +39,6 @@ class SearchThread(QThread):
             self.search_completed.emit(results)
         except Exception as e:
             self.search_error.emit(str(e))
-
-
-RESULTS_ROLE = int(Qt.ItemDataRole.UserRole) + 1
-SELECTED_ROLE = int(Qt.ItemDataRole.UserRole) + 2
-TYPE_ROLE = int(Qt.ItemDataRole.UserRole) + 3
-
-
-class ResultComboDelegate(QStyledItemDelegate):
-    """Delegate para selecionar resultados do TMDB"""
-
-    selection_changed = pyqtSignal(int, int)
-
-    def createEditor(self, parent, option, index):
-        results = index.data(RESULTS_ROLE) or []
-        media_type = index.data(TYPE_ROLE) or "movie"
-        combo = QComboBox(parent)
-        for result in results[:10]:
-            if media_type == "tv":
-                title = result.get('name', 'N/A')
-                release_date = result.get('first_air_date', '')
-            else:
-                title = result.get('title', 'N/A')
-                release_date = result.get('release_date', '')
-            year = release_date.split('-')[0] if release_date else ''
-            label = f"{title} ({year})" if year else title
-            combo.addItem(label)
-        combo.activated.connect(lambda i: self._commit_and_close(combo, index.row(), i))
-        return combo
-
-    def setEditorData(self, editor, index):
-        selected_index = index.data(SELECTED_ROLE)
-        if isinstance(selected_index, int) and 0 <= selected_index < editor.count():
-            editor.setCurrentIndex(selected_index)
-
-    def setModelData(self, editor, model, index):
-        model.setData(index, editor.currentText(), Qt.ItemDataRole.DisplayRole)
-        model.setData(index, editor.currentIndex(), SELECTED_ROLE)
-
-    def _commit_and_close(self, editor, row, index):
-        self.selection_changed.emit(row, index)
-        self.commitData.emit(editor)
-        self.closeEditor.emit(editor, QStyledItemDelegate.EndEditHint.NoHint)
 
 
 class RenomeadorUI(QMainWindow):
@@ -108,7 +68,7 @@ class RenomeadorUI(QMainWindow):
         self.setWindowTitle("Kodi Bot - TMDB")
         self.setGeometry(100, 100, 1000, 700)
 
-        icon_path = self.get_asset_path("tmdb-256.png")
+        icon_path = get_asset_path("tmdb-256.png")
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
         
@@ -116,51 +76,17 @@ class RenomeadorUI(QMainWindow):
         self.setCentralWidget(central_widget)
         
         layout = QVBoxLayout()
-        
-        # Seção de Configuração
-        config_layout = QHBoxLayout()
-        logo_path = self.get_asset_path("tmdb-64.png")
-        if logo_path.exists():
-            logo_label = QLabel()
-            pixmap = QPixmap(str(logo_path))
-            logo_label.setPixmap(pixmap.scaled(64, 64, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-            config_layout.addWidget(logo_label)
-        config_layout.addWidget(QLabel("Pasta de Filmes:"))
-        config_layout.addStretch()
-        browse_btn = QPushButton("Procurar Pasta")
-        browse_btn.clicked.connect(self.browse_folder)
-        config_layout.addWidget(browse_btn)
-        refresh_btn = QPushButton("Atualizar Lista")
-        refresh_btn.clicked.connect(self.load_video_files)
-        config_layout.addWidget(refresh_btn)
-        config_layout.addWidget(QLabel("Tipo:"))
-        self.search_type_combo = QComboBox()
-        self.search_type_combo.addItem("Filmes", "movie")
-        self.search_type_combo.addItem("Series", "tv")
-        config_layout.addWidget(self.search_type_combo)
-        self.search_type_combo.currentIndexChanged.connect(self.on_search_type_changed)
-        config_layout.addWidget(QLabel("Idioma:"))
-        self.language_combo = QComboBox()
-        self.language_combo.addItem("Selecione...", "")
-        self.language_combo.addItem("Portuguese (BR)", "pt-BR")
-        self.language_combo.addItem("English (US)", "en-US")
-        self.language_combo.addItem("Spanish (ES)", "es-ES")
-        current_lang = self.get_env_value("APP_LANGUAGE")
-        if current_lang:
-            lang_index = self.language_combo.findData(current_lang)
-            if lang_index >= 0:
-                self.language_combo.setCurrentIndex(lang_index)
-            else:
-                self.language_combo.addItem(current_lang, current_lang)
-                self.language_combo.setCurrentIndex(self.language_combo.count() - 1)
-        else:
-            self.language_combo.setCurrentIndex(0)
-        self.language_combo.currentIndexChanged.connect(self.on_language_changed)
-        config_layout.addWidget(self.language_combo)
-        layout.addLayout(config_layout)
-        
-        self.folder_label = QLabel("Nenhuma pasta selecionada")
-        layout.addWidget(self.folder_label)
+
+        self.header_config = HeaderSettings(parent=self)
+        self.header_config.movie_folder_selected.connect(self.on_movie_folder_selected)
+        self.header_config.kodi_folder_selected.connect(self.on_kodi_folder_selected)
+        self.header_config.refresh_requested.connect(self.refresh_files_lists)
+        self.header_config.search_type_changed.connect(self.on_search_type_changed)
+        self.header_config.more_settings_requested.connect(self.open_more_settings)
+        layout.addWidget(self.header_config)
+
+        self.search_type_combo = self.header_config.search_type_combo
+        self.folder_label = self.header_config.folder_label
 
         self.series_layout = QHBoxLayout()
         self.series_layout.addWidget(QLabel("Serie:"))
@@ -180,63 +106,21 @@ class RenomeadorUI(QMainWindow):
         self.series_layout.addWidget(self.season_combo)
         layout.addLayout(self.series_layout)
         
-        # Seção de Arquivos
-        layout.addWidget(QLabel("Arquivos na pasta:"))
-        self.files_table = QTableWidget()
-        self.files_table.setColumnCount(4)
-        self.files_table.setHorizontalHeaderLabels(
-            ["Arquivo Original", "Ano Detectado", "Nome Sugerido", "Selecao"]
-        )
-        self.files_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.Stretch
-        )
-        self.files_table.horizontalHeader().setSectionResizeMode(
-            1, QHeaderView.ResizeMode.ResizeToContents
-        )
-        self.files_table.horizontalHeader().setSectionResizeMode(
-            2, QHeaderView.ResizeMode.Stretch
-        )
-        self.files_table.horizontalHeader().setSectionResizeMode(
-            3, QHeaderView.ResizeMode.Stretch
-        )
-        self.files_table.setEditTriggers(
-            QAbstractItemView.EditTrigger.CurrentChanged
-        )
+        self.files_section = NewFilesList(parent=self)
+        self.files_table = self.files_section.files_table
+        self.kodi_files_table = self.files_section.kodi_files_table
+        self.poster_label = self.files_section.poster_label
+        self.poster_title = self.files_section.poster_title
+        self.poster_meta = self.files_section.poster_meta
+        self.poster_overview = self.files_section.poster_overview
+        self.result_delegate = self.files_section.result_delegate
+        self.original_column = self.files_section.original_column
+        self.year_column = self.files_section.year_column
+        self.select_column = self.files_section.select_column
+        self.send_to_kodi_column = self.files_section.send_to_kodi_column
         self.files_table.currentCellChanged.connect(self.on_table_selection_changed)
-        files_layout = QHBoxLayout()
-        files_layout.addWidget(self.files_table, 1)
-
-        poster_layout = QVBoxLayout()
-        self.poster_label = QLabel("Sem imagem")
-        self.poster_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.poster_label.setFixedSize(220, 330)
-        self.poster_label.setStyleSheet("border: 1px solid #444;")
-        poster_layout.addWidget(self.poster_label)
-
-        self.poster_title = QLabel("")
-        self.poster_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.poster_title.setWordWrap(True)
-        poster_layout.addWidget(self.poster_title)
-
-        self.poster_meta = QLabel("")
-        self.poster_meta.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.poster_meta.setWordWrap(True)
-        poster_layout.addWidget(self.poster_meta)
-
-        self.poster_overview = QLabel("")
-        self.poster_overview.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.poster_overview.setWordWrap(True)
-        self.poster_overview.setFixedWidth(220)
-        poster_layout.addWidget(self.poster_overview)
-        poster_layout.addStretch()
-
-        files_layout.addLayout(poster_layout)
-
-        layout.addLayout(files_layout)
-
-        self.result_delegate = ResultComboDelegate(self.files_table)
         self.result_delegate.selection_changed.connect(self.on_result_choice_changed)
-        self.files_table.setItemDelegateForColumn(3, self.result_delegate)
+        layout.addWidget(self.files_section)
         
         # Botões de Ação
         action_layout = QHBoxLayout()
@@ -246,7 +130,7 @@ class RenomeadorUI(QMainWindow):
         search_btn.clicked.connect(self.search_movie)
         action_layout.addWidget(search_btn)
         
-        rename_btn = QPushButton("Renomear Arquivos")
+        rename_btn = QPushButton("Enviar Arquivos")
         rename_btn.clicked.connect(self.rename_files)
         action_layout.addWidget(rename_btn)
         
@@ -254,9 +138,6 @@ class RenomeadorUI(QMainWindow):
         
         central_widget.setLayout(layout)
         self.on_search_type_changed()
-
-    def get_asset_path(self, filename):
-        return Path(__file__).parent.parent / "img" / filename
 
     def init_tmdb(self):
         """Inicializa o cliente TMDB"""
@@ -267,7 +148,6 @@ class RenomeadorUI(QMainWindow):
         except ValueError as e:
             api_key = self.prompt_api_key()
             if api_key:
-                self.save_api_key(api_key)
                 try:
                     self.tmdb_client = TMDBClient()
                 except ValueError as e2:
@@ -285,23 +165,40 @@ class RenomeadorUI(QMainWindow):
 
     def prompt_api_key(self):
         """Solicita a API Key do TMDB ao usuario"""
-        key, ok = QInputDialog.getText(
-            self,
-            "Chave TMDB",
-            "Informe sua TMDB API Key:",
-            QLineEdit.EchoMode.Password
+        more_settings = MoreSettings(parent=self)
+        return more_settings.ask_tmdb_api_key()
+
+    def open_more_settings(self):
+        more_settings = MoreSettings(parent=self)
+        current_language = self.get_env_value("APP_LANGUAGE")
+        settings_result = more_settings.open_settings_dialog(
+            current_language=current_language,
+            remove_original_after_send=self.should_remove_original_after_send(),
         )
-        key = key.strip()
-        return key if ok and key else None
 
-    def save_api_key(self, api_key):
-        """Salva a API Key nas configuracoes do app"""
+        if not settings_result:
+            return
+
+        language = settings_result.get("language")
+        if language:
+            self.save_app_language(language)
+
+        api_key = settings_result.get("api_key")
+        if not api_key:
+            QMessageBox.information(self, "Configurações", "Idioma atualizado com sucesso.")
+            return
+
         try:
-            set_setting("TMDB_API_KEY", api_key)
-        except OSError as exc:
-            self.show_file_error("Erro ao salvar configuracoes", get_settings_path(), exc)
+            self.tmdb_client = TMDBClient()
+            QMessageBox.information(self, "Configurações", "TMDB API Key atualizada com sucesso.")
+        except ValueError as exc:
+            QMessageBox.critical(
+                self,
+                "Erro de Configuração",
+                f"Nao foi possivel inicializar TMDB com a nova chave:\n\n{exc}"
+            )
 
-    def on_search_type_changed(self):
+    def on_search_type_changed(self, *_):
         is_tv = self.search_type_combo.currentData() == "tv"
         for i in range(self.series_layout.count()):
             item = self.series_layout.itemAt(i)
@@ -322,58 +219,45 @@ class RenomeadorUI(QMainWindow):
             self.show_file_error("Erro ao ler configuracoes", get_settings_path(), exc)
             return None
 
-    def on_language_changed(self):
-        language = self.language_combo.currentData()
-        if language:
-            self.save_app_language(language)
-    
-    def browse_folder(self):
-        """Abre diálogo para selecionar pasta"""
-        folder = QFileDialog.getExistingDirectory(
-            self, "Selecione a pasta com os filmes"
-        )
-        if folder:
-            self.selected_folder = folder
-            self.folder_label.setText(f"Pasta: {folder}")
-            self.save_folder_preference(folder)
-            self.load_video_files()
-    
-    def save_folder_preference(self, folder_path):
-        """Salva a pasta selecionada nas preferências"""
-        config_dir = get_config_dir()
-        try:
-            config_dir.mkdir(parents=True, exist_ok=True)
-        except OSError as exc:
-            self.show_file_error("Erro ao criar pasta de configuracao", config_dir, exc)
-            return
+    def should_remove_original_after_send(self):
+        value = (self.get_env_value("REMOVE_ORIGINAL_AFTER_SEND") or "").strip().lower()
+        return value in {"1", "true", "yes", "on", "sim"}
 
-        config_file = config_dir / "last_folder.txt"
-        try:
-            config_file.write_text(folder_path)
-        except OSError as exc:
-            self.show_file_error("Erro ao salvar ultima pasta", config_file, exc)
+    def on_movie_folder_selected(self, folder):
+        self.selected_movie_folder = folder
+        set_setting("MOVIES_FOLDER", folder)
+        
+        self.load_video_files()
+    
+    def on_kodi_folder_selected(self, folder):
+        self.selected_kodi_folder = folder
+        set_setting("KODI_FOLDER", folder)
+        self.load_kodi_files()
     
     def load_folder_preference(self):
-        """Carrega a última pasta selecionada"""
-        config_file = get_config_dir() / "last_folder.txt"
+        movie_folder = get_setting("MOVIES_FOLDER")
+        if movie_folder and Path(movie_folder).exists():
+            self.selected_movie_folder = movie_folder
+            self.header_config.set_movie_selected_folder(movie_folder)
         
-        if config_file.exists():
-            try:
-                folder = config_file.read_text().strip()
-            except OSError as exc:
-                self.show_file_error("Erro ao ler ultima pasta", config_file, exc)
-                return
-            if Path(folder).exists():
-                self.selected_folder = folder
-                self.folder_label.setText(f"Pasta: {folder}")
-                self.load_video_files()
+        kodi_folder = get_setting("KODI_FOLDER")
+        if kodi_folder and Path(kodi_folder).exists():
+            self.selected_kodi_folder = kodi_folder
+            self.header_config.set_kodi_selected_folder(kodi_folder)
+        
+        self.refresh_files_lists()
 
     def show_file_error(self, title, path, exc):
         message = f"{title}:\n{path}\n\nDetalhes: {exc}"
         QMessageBox.critical(self, "Erro de Arquivo", message)
+
+    def refresh_files_lists(self):
+        self.load_video_files()
+        self.load_kodi_files()
     
     def load_video_files(self):
         """Carrega lista de arquivos de vídeo da pasta selecionada"""
+        self.selected_folder = self.header_config.get_movie_selected_folder()
         if not self.selected_folder:
             return
         
@@ -397,20 +281,45 @@ class RenomeadorUI(QMainWindow):
                 self.files_table.insertRow(row)
                 original_item = QTableWidgetItem(file.name)
                 original_item.setFlags(original_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                self.files_table.setItem(row, 0, original_item)
+                self.files_table.setItem(row, self.original_column, original_item)
 
                 year_item = QTableWidgetItem("")
                 year_item.setFlags(year_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                self.files_table.setItem(row, 1, year_item)
-
-                suggested_item = QTableWidgetItem("")
-                suggested_item.setFlags(suggested_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                self.files_table.setItem(row, 2, suggested_item)
+                self.files_table.setItem(row, self.year_column, year_item)
                 select_item = QTableWidgetItem("Aguardando busca")
                 select_item.setFlags(select_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 select_item.setData(RESULTS_ROLE, [])
                 select_item.setData(SELECTED_ROLE, -1)
-                self.files_table.setItem(row, 3, select_item)
+                select_item.setData(SUGGESTED_NAME_ROLE, "")
+                self.files_table.setItem(row, self.select_column, select_item)
+
+                send_item = QTableWidgetItem("")
+                send_item.setFlags(
+                    Qt.ItemFlag.ItemIsUserCheckable
+                    | Qt.ItemFlag.ItemIsEnabled
+                    | Qt.ItemFlag.ItemIsSelectable
+                )
+                send_item.setCheckState(Qt.CheckState.Unchecked)
+                self.files_table.setItem(row, self.send_to_kodi_column, send_item)
+
+    def load_kodi_files(self):
+        kodi_folder = self.header_config.get_kodi_selected_folder()
+        if not kodi_folder:
+            self.files_section.clear_kodi_files()
+            return
+
+        kodi_path = Path(kodi_folder)
+        if not kodi_path.exists():
+            self.files_section.clear_kodi_files()
+            return
+
+        kodi_files = []
+        for file in kodi_path.iterdir():
+            if file.is_file() and KodiNamer.is_video_file(file.name):
+                kodi_files.append(file.name)
+
+        kodi_files.sort(key=str.lower)
+        self.files_section.set_kodi_files(kodi_files)
     
     def search_movie(self):
         """Busca filmes no TMDB baseado nos arquivos da pasta"""
@@ -526,10 +435,10 @@ class RenomeadorUI(QMainWindow):
         for row, video_file in enumerate(self.video_files):
             self.search_results[row] = self.season_episodes
             self.search_types[row] = "tv"
-            select_item = self.files_table.item(row, 3)
+            select_item = self.files_table.item(row, self.select_column)
             if select_item is None:
                 select_item = QTableWidgetItem()
-                self.files_table.setItem(row, 3, select_item)
+                self.files_table.setItem(row, self.select_column, select_item)
             select_item.setData(RESULTS_ROLE, self.season_episodes)
             select_item.setData(TYPE_ROLE, "tv")
 
@@ -575,7 +484,12 @@ class RenomeadorUI(QMainWindow):
         if row < len(self.search_types):
             self.search_types[row] = self.active_search_type
         if row < self.files_table.rowCount():
-            self.files_table.setItem(row, 1, QTableWidgetItem(str(year or "")))
+            year_item = self.files_table.item(row, self.year_column)
+            if year_item is None:
+                year_item = QTableWidgetItem("")
+                year_item.setFlags(year_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                self.files_table.setItem(row, self.year_column, year_item)
+            year_item.setText(str(year or ""))
         
         if not query:
             self.current_search_index += 1
@@ -609,10 +523,10 @@ class RenomeadorUI(QMainWindow):
                 sorted_results = results
             
             self.search_results[row] = sorted_results
-            select_item = self.files_table.item(row, 3)
+            select_item = self.files_table.item(row, self.select_column)
             if select_item is None:
                 select_item = QTableWidgetItem()
-                self.files_table.setItem(row, 3, select_item)
+                self.files_table.setItem(row, self.select_column, select_item)
             select_item.setData(RESULTS_ROLE, sorted_results)
             select_item.setData(TYPE_ROLE, media_type)
             if sorted_results:
@@ -633,7 +547,7 @@ class RenomeadorUI(QMainWindow):
                 select_item.setText("Sem resultados")
                 select_item.setData(SELECTED_ROLE, -1)
                 select_item.setFlags(select_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                self.files_table.setItem(row, 2, QTableWidgetItem(""))
+                select_item.setData(SUGGESTED_NAME_ROLE, "")
                 if row == self.current_search_index:
                     self.poster_label.setText("Sem imagem")
                     self.poster_label.setPixmap(QPixmap())
@@ -656,10 +570,10 @@ class RenomeadorUI(QMainWindow):
         """Atualiza o nome sugerido conforme selecao do usuario"""
         self.update_suggested_name(row, index)
 
-    def on_table_selection_changed(self, current_row, current_column, previous_row, previous_column):
+    def on_table_selection_changed(self, current_row):
         if current_row < 0 or current_row >= len(self.search_results):
             return
-        select_item = self.files_table.item(current_row, 3)
+        select_item = self.files_table.item(current_row, self.select_column)
         if not select_item:
             return
         selected_index = select_item.data(SELECTED_ROLE)
@@ -684,7 +598,9 @@ class RenomeadorUI(QMainWindow):
             suggested_name = KodiNamer.suggest_episode_filename(
                 video_file.name, series_title, season_num, episode_num, episode_title
             )
-            self.files_table.setItem(row, 2, QTableWidgetItem(suggested_name))
+            select_item = self.files_table.item(row, self.select_column)
+            if select_item is not None:
+                select_item.setData(SUGGESTED_NAME_ROLE, suggested_name)
             self.update_poster(row, index)
             return
         else:
@@ -695,7 +611,9 @@ class RenomeadorUI(QMainWindow):
         suggested_name = KodiNamer.suggest_kodi_filename(
             video_file.name, title, year
         )
-        self.files_table.setItem(row, 2, QTableWidgetItem(suggested_name))
+        select_item = self.files_table.item(row, self.select_column)
+        if select_item is not None:
+            select_item.setData(SUGGESTED_NAME_ROLE, suggested_name)
         self.update_poster(row, index)
 
     def update_poster(self, row, index):
@@ -785,44 +703,73 @@ class RenomeadorUI(QMainWindow):
         self.poster_overview.setText(overview if overview else "")
     
     def rename_files(self):
-        """Renomeia os arquivos selecionados"""
+        """Copia os arquivos marcados para a pasta do Kodi"""
         if not self.selected_folder:
             QMessageBox.warning(self, "Aviso", "Selecione uma pasta primeiro")
             return
+
+        kodi_folder = self.header_config.get_kodi_selected_folder()
+        if not kodi_folder:
+            QMessageBox.warning(self, "Aviso", "Selecione a pasta do Kodi primeiro")
+            return
+
+        kodi_path = Path(kodi_folder)
+        if not kodi_path.exists() or not kodi_path.is_dir():
+            QMessageBox.warning(self, "Aviso", "Pasta do Kodi inválida")
+            return
         
-        renamed_count = 0
+        copied_count = 0
+        selected_count = 0
         errors = []
+        remove_original_after_send = self.should_remove_original_after_send()
         
         for row in range(self.files_table.rowCount()):
-            original_item = self.files_table.item(row, 0)
-            suggested_item = self.files_table.item(row, 2)
+            original_item = self.files_table.item(row, self.original_column)
+            select_item = self.files_table.item(row, self.select_column)
+            send_item = self.files_table.item(row, self.send_to_kodi_column)
             
-            if not original_item or not suggested_item:
+            if not original_item or not select_item or not send_item:
                 continue
+
+            if send_item.checkState() != Qt.CheckState.Checked:
+                continue
+
+            selected_count += 1
             
             original_name = original_item.text()
-            suggested_name = suggested_item.text()
-            
-            if not suggested_name:
-                continue
+            suggested_name = select_item.data(SUGGESTED_NAME_ROLE) or original_name
             
             original_path = Path(self.selected_folder) / original_name
-            new_path = Path(self.selected_folder) / suggested_name
+            new_path = kodi_path / suggested_name
+
+            if not original_path.exists():
+                errors.append(f"{original_name}: arquivo de origem não encontrado")
+                continue
+
+            if new_path.exists():
+                errors.append(f"{suggested_name}: já existe na pasta Kodi")
+                continue
             
             try:
-                original_path.rename(new_path)
-                renamed_count += 1
+                if remove_original_after_send:
+                    shutil.move(str(original_path), str(new_path))
+                else:
+                    shutil.copy2(original_path, new_path)
+                copied_count += 1
             except Exception as e:
                 errors.append(f"{original_name}: {str(e)}")
+
+        if selected_count == 0:
+            QMessageBox.information(self, "Aviso", "Nenhum arquivo marcado para envio")
+            return
         
         if errors:
-            error_msg = "Erros ao renomear:\n" + "\n".join(errors)
+            error_msg = "Erros ao enviar:\n" + "\n".join(errors)
             QMessageBox.warning(self, "Erros", error_msg)
         
         QMessageBox.information(
             self, "Conclusão",
-            f"{renamed_count} arquivo(s) renomeado(s) com sucesso"
+            f"{copied_count} arquivo(s) {'movido(s)' if remove_original_after_send else 'copiado(s)'} para a pasta Kodi"
         )
         
-        # Recarrega a lista de arquivos
-        self.load_video_files()
+        self.refresh_files_lists()

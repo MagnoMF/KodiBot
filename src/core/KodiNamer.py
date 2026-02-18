@@ -46,7 +46,7 @@ class KodiNamer:
         clean_name = name.lower()
         
         clean_name = re.sub(
-            r"\b(\d{3,4}p|\d{3,4}i|4k|uhd|hdr|10bit|dublado|dual|dual\s*audio|dual\s*5\.1|5\.1|camrip|webrip|web[-\s]?dl|web\s*rip|web|hdrip|brrip|blu\s*ray|bluray|remux|proper|repack|extended|unrated|dc|ltd|xvid|x264|x265|h264|h265|dvdrip|dvd|subs|hdcam|cam|ts|tc|r5)\b",
+            r"\b(\d{3,4}p|\d{3,4}i|4k|uhd|hdr|10bit|dublado|dual|dual\s*audio|dual\s*5\.1|5\.1|camrip|webrip|web[-\s]?dl|web\s*rip|web|hdrip|brrip|blu\s*ray|bluray|remux|proper|repack|extended|unrated|dc|ltd|xvid|x264|x265|h264|h265|dvdrip|dvd|subs|hdcam|cam|ts|tc|sdr|2160p|web-dl|h265|aoc|ddp5|atmos|r5)\b",
             " ",
             clean_name,
             flags=re.IGNORECASE,
