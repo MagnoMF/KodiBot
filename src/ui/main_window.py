@@ -69,7 +69,7 @@ class RenomeadorUI(QMainWindow):
         self.setGeometry(100, 100, 1000, 700)
 
         icon_path = get_asset_path("tmdb-256.png")
-        if icon_path.exists():
+        if icon_path:
             self.setWindowIcon(QIcon(str(icon_path)))
         
         central_widget = QWidget()
